@@ -6,8 +6,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::{Manager, Runtime};
 
+use crate::platform::WebViewExecutor;
+
 #[cfg(target_os = "macos")]
-use crate::platform::macos::WebViewExecutor;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 

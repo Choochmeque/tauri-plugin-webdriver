@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use block2::RcBlock;
 use objc2::runtime::AnyObject;
-use objc2_foundation::{NSError, NSString};
-use objc2_web_kit::WKWebView;
+use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
+use objc2_foundation::{NSData, NSDictionary, NSError, NSString};
+use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
@@ -381,10 +384,55 @@ impl<R: Runtime> WebViewExecutor<R> {
         extract_bool_value(&result)
     }
 
-    /// Take screenshot via canvas (placeholder - needs native implementation)
+    /// Take screenshot using WKWebView's native snapshot API
     pub async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Use WKWebView.takeSnapshotWithConfiguration for proper screenshots
-        Ok(String::new())
+        let (tx, rx) = oneshot::channel();
+
+        let result = self.window.with_webview(move |webview| {
+            unsafe {
+                let wk_webview: &WKWebView = &*webview.inner().cast();
+
+                // Create snapshot configuration (nil = full page)
+                let config = WKSnapshotConfiguration::new();
+
+                // Create completion handler
+                let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+                let block = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
+                    let response = if !error.is_null() {
+                        let error_ref = &*error;
+                        let description = error_ref.localizedDescription();
+                        Err(description.to_string())
+                    } else if image.is_null() {
+                        Err("No image returned".to_string())
+                    } else {
+                        // Convert NSImage to PNG data
+                        let image_ref = &*image;
+                        match image_to_png_base64(image_ref) {
+                            Ok(base64) => Ok(base64),
+                            Err(e) => Err(e),
+                        }
+                    };
+
+                    if let Some(tx) = tx.lock().unwrap().take() {
+                        let _ = tx.send(response);
+                    }
+                });
+
+                wk_webview.takeSnapshotWithConfiguration_completionHandler(Some(&config), &block);
+            }
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
+        }
+
+        // Wait for result with timeout
+        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+            Ok(Ok(Ok(base64))) => Ok(base64),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::unknown_error("Screenshot timeout")),
+        }
     }
 
     /// Dispatch a key event (keydown/keyup)
@@ -528,6 +576,27 @@ impl<R: Runtime> WebViewExecutor<R> {
         self.evaluate_js(&script).await?;
         Ok(())
     }
+}
+
+/// Convert NSImage to PNG and encode as base64
+unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
+    // Get TIFF representation
+    let tiff_data: Option<objc2::rc::Retained<NSData>> = image.TIFFRepresentation();
+    let tiff_data = tiff_data.ok_or("Failed to get TIFF representation")?;
+
+    // Create bitmap image rep from TIFF data
+    let bitmap_rep = NSBitmapImageRep::imageRepWithData(&tiff_data)
+        .ok_or("Failed to create bitmap image rep")?;
+
+    // Convert to PNG with empty properties dictionary
+    let empty_dict: objc2::rc::Retained<NSDictionary<NSString>> = NSDictionary::new();
+    let png_data: Option<objc2::rc::Retained<NSData>> =
+        bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict);
+    let png_data = png_data.ok_or("Failed to convert to PNG")?;
+
+    // Get raw bytes and base64 encode
+    let bytes = png_data.bytes();
+    Ok(BASE64_STANDARD.encode(bytes))
 }
 
 /// Convert an NSObject to a JSON value

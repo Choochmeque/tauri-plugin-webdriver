@@ -6,8 +6,9 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{Manager, Runtime};
 
+use crate::platform::WebViewExecutor;
+
 #[cfg(target_os = "macos")]
-use crate::platform::macos::WebViewExecutor;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 use crate::webdriver::locator::LocatorStrategy;
@@ -103,8 +104,6 @@ pub async fn find_all<R: Runtime + 'static>(
         ))
     })?;
 
-    // Generate the JS code to find multiple elements
-    let find_js = strategy.to_find_js(&request.value, true, "__wd_temp_els");
     drop(sessions);
 
     #[cfg(target_os = "macos")]

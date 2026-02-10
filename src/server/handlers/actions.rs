@@ -5,10 +5,10 @@ use axum::Json;
 use serde::Deserialize;
 use tauri::{Manager, Runtime};
 
-#[cfg(target_os = "macos")]
-use crate::platform::macos::WebViewExecutor;
+use crate::platform::WebViewExecutor;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
+
 
 #[derive(Debug, Deserialize)]
 pub struct ActionsRequest {
