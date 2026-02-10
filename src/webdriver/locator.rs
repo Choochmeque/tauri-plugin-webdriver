@@ -21,6 +21,41 @@ impl LocatorStrategy {
         }
     }
 
+    /// Generate JavaScript expression to find element (just the selector, no wrapper)
+    pub fn to_selector_js(&self, value: &str) -> String {
+        let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
+
+        match self {
+            LocatorStrategy::CssSelector => {
+                format!("document.querySelector('{}')", escaped)
+            }
+            LocatorStrategy::TagName => {
+                format!("document.getElementsByTagName('{}')[0] || null", escaped)
+            }
+            LocatorStrategy::XPath => {
+                format!(
+                    r#"(function() {{
+                        var result = document.evaluate('{}', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                        return result.singleNodeValue;
+                    }})()"#,
+                    escaped
+                )
+            }
+            LocatorStrategy::LinkText => {
+                format!(
+                    r#"Array.from(document.querySelectorAll('a')).find(a => a.textContent.trim() === '{}') || null"#,
+                    escaped
+                )
+            }
+            LocatorStrategy::PartialLinkText => {
+                format!(
+                    r#"Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('{}')) || null"#,
+                    escaped
+                )
+            }
+        }
+    }
+
     /// Generate JavaScript code to find element(s) and store in global variable
     pub fn to_find_js(&self, value: &str, multiple: bool, js_var: &str) -> String {
         let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");

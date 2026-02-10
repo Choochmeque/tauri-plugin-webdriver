@@ -5,6 +5,8 @@ use axum::Json;
 use serde::Deserialize;
 use tauri::{Manager, Runtime};
 
+#[cfg(target_os = "macos")]
+use crate::platform::macos::WebViewExecutor;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
@@ -14,32 +16,43 @@ pub struct NavigateRequest {
 }
 
 /// POST /session/{session_id}/url - Navigate to URL
-pub async fn navigate<R: Runtime>(
+pub async fn navigate<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
     Json(request): Json<NavigateRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
+    let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
-    // Execute navigation via JavaScript
-    let script = format!(r#"window.location.href = '{}';"#, request.url.replace('\'', "\\'"));
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            executor.navigate(&request.url).await?;
+        }
+    }
 
-    // TODO: Execute script via WKWebView
-    // For now, use Tauri's webview eval
-    if let Some(webview) = state.app.webview_windows().values().next() {
-        webview
-            .eval(&script)
-            .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+    #[cfg(not(target_os = "macos"))]
+    {
+        let script = format!(
+            r#"window.location.href = '{}';"#,
+            request.url.replace('\'', "\\'")
+        );
+        if let Some(webview) = state.app.webview_windows().values().next() {
+            webview
+                .eval(&script)
+                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+        }
     }
 
     Ok(WebDriverResponse::null())
 }
 
 /// GET /session/{session_id}/url - Get current URL
-pub async fn get_url<R: Runtime>(
+pub async fn get_url<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -47,14 +60,22 @@ pub async fn get_url<R: Runtime>(
     let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
-    // TODO: Get URL via evaluateJavaScript
-    // For now, return placeholder
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            let url = executor.get_url().await?;
+            return Ok(WebDriverResponse::success(url));
+        }
+    }
+
     Ok(WebDriverResponse::success("about:blank"))
 }
 
 /// GET /session/{session_id}/title - Get page title
-pub async fn get_title<R: Runtime>(
+pub async fn get_title<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -62,13 +83,22 @@ pub async fn get_title<R: Runtime>(
     let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
-    // TODO: Get title via evaluateJavaScript
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            let title = executor.get_title().await?;
+            return Ok(WebDriverResponse::success(title));
+        }
+    }
+
     Ok(WebDriverResponse::success(""))
 }
 
 /// POST /session/{session_id}/back - Navigate back
-pub async fn back<R: Runtime>(
+pub async fn back<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -76,6 +106,7 @@ pub async fn back<R: Runtime>(
     let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
     if let Some(webview) = state.app.webview_windows().values().next() {
         webview
@@ -87,7 +118,7 @@ pub async fn back<R: Runtime>(
 }
 
 /// POST /session/{session_id}/forward - Navigate forward
-pub async fn forward<R: Runtime>(
+pub async fn forward<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -95,6 +126,7 @@ pub async fn forward<R: Runtime>(
     let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
     if let Some(webview) = state.app.webview_windows().values().next() {
         webview
@@ -106,7 +138,7 @@ pub async fn forward<R: Runtime>(
 }
 
 /// POST /session/{session_id}/refresh - Refresh page
-pub async fn refresh<R: Runtime>(
+pub async fn refresh<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -114,6 +146,7 @@ pub async fn refresh<R: Runtime>(
     let _session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
     if let Some(webview) = state.app.webview_windows().values().next() {
         webview
