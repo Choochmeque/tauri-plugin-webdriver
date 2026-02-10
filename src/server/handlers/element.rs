@@ -91,19 +91,76 @@ pub async fn find_all<R: Runtime + 'static>(
     Path(session_id): Path<String>,
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let _session = sessions
-        .get(&session_id)
+    let mut sessions = state.sessions.write().await;
+    let session = sessions
+        .get_mut(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-    let _strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
+    let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
         WebDriverErrorResponse::invalid_argument(&format!(
             "Unknown locator strategy: {}",
             request.using
         ))
     })?;
 
-    // TODO: Implement finding multiple elements
+    // Generate the JS code to find multiple elements
+    let find_js = strategy.to_find_js(&request.value, true, "__wd_temp_els");
+    drop(sessions);
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+
+            // First, find all elements and get count
+            let count_script = format!(
+                r#"
+                var els = {};
+                window.__wd_temp_els = els;
+                return els ? els.length : 0;
+                "#,
+                strategy.to_selector_js_multiple(&request.value)
+            );
+
+            let result = executor.evaluate_js(&count_script).await?;
+            let count = if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                if success {
+                    result.get("value").and_then(|v| v.as_u64()).unwrap_or(0) as usize
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            // Store each element reference
+            let mut elements = Vec::new();
+            let mut sessions = state.sessions.write().await;
+            let session = sessions.get_mut(&session_id).ok_or_else(|| {
+                WebDriverErrorResponse::invalid_session_id(&session_id)
+            })?;
+
+            for i in 0..count {
+                let element_ref = session.elements.store();
+                let js_var = element_ref.js_ref.clone();
+                let element_id = element_ref.id.clone();
+
+                // Store each element in its own global variable
+                let store_script = format!(
+                    "window.{} = window.__wd_temp_els[{}]; return true;",
+                    js_var, i
+                );
+                let _ = executor.evaluate_js(&store_script).await;
+
+                elements.push(json!({
+                    "element-6066-11e4-a52e-4f735466cecf": element_id
+                }));
+            }
+
+            return Ok(WebDriverResponse::success(elements));
+        }
+    }
+
     Ok(WebDriverResponse::success(Vec::<serde_json::Value>::new()))
 }
 
@@ -292,12 +349,23 @@ pub async fn get_tag_name<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-    let _element = session
+    let element = session
         .elements
         .get(&element_id)
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
-    // TODO: Implement with WebViewExecutor
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            let tag_name = executor.get_element_tag_name(&js_var).await?;
+            return Ok(WebDriverResponse::success(tag_name));
+        }
+    }
+
     Ok(WebDriverResponse::success(""))
 }
 
@@ -334,17 +402,29 @@ pub async fn get_attribute<R: Runtime + 'static>(
 /// GET /session/{session_id}/element/{element_id}/property/{name} - Get element property
 pub async fn get_property<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
-    Path((session_id, element_id, _name)): Path<(String, String, String)>,
+    Path((session_id, element_id, name)): Path<(String, String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
     let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-    let _element = session
+    let element = session
         .elements
         .get(&element_id)
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            let prop = executor.get_element_property(&js_var, &name).await?;
+            return Ok(WebDriverResponse::success(prop));
+        }
+    }
 
     Ok(WebDriverResponse::null())
 }
@@ -389,11 +469,22 @@ pub async fn is_enabled<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-    let _element = session
+    let element = session
         .elements
         .get(&element_id)
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
-    // TODO: Implement with WebViewExecutor
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            let enabled = executor.is_element_enabled(&js_var).await?;
+            return Ok(WebDriverResponse::success(enabled));
+        }
+    }
+
     Ok(WebDriverResponse::success(true))
 }

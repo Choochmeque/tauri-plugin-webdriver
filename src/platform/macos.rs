@@ -291,6 +291,177 @@ impl<R: Runtime> WebViewExecutor<R> {
 
         Ok(serde_json::Value::Null)
     }
+
+    /// Execute asynchronous user script (with callback)
+    pub async fn execute_async_script(
+        &self,
+        script: &str,
+        args: &[serde_json::Value],
+    ) -> Result<serde_json::Value, WebDriverErrorResponse> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = oneshot::channel();
+
+        // Store the sender
+        {
+            let mut pending = PENDING_RESULTS.write().await;
+            pending.insert(request_id.clone(), tx);
+        }
+
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
+
+        // For async scripts, the last argument is the callback that resolves the promise
+        let wrapper = format!(
+            r#"(async function() {{
+                var requestId = '{}';
+                try {{
+                    var args = {};
+                    var resolveResult;
+                    var callback = function(result) {{
+                        resolveResult = result;
+                    }};
+                    args.push(callback);
+                    var fn = function() {{ {} }};
+                    await fn.apply(null, args);
+                    // Give callback a moment to be called
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    if (window.__TAURI__ && window.__TAURI__.event) {{
+                        await window.__TAURI__.event.emit('webdriver-result', {{
+                            requestId: requestId,
+                            success: true,
+                            value: resolveResult
+                        }});
+                    }}
+                }} catch (e) {{
+                    if (window.__TAURI__ && window.__TAURI__.event) {{
+                        await window.__TAURI__.event.emit('webdriver-result', {{
+                            requestId: requestId,
+                            success: false,
+                            error: e.message || String(e)
+                        }});
+                    }}
+                }}
+            }})()"#,
+            request_id, args_json, script
+        );
+
+        self.window
+            .eval(&wrapper)
+            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+
+        // Wait for result with timeout (async scripts may take longer)
+        let result = tokio::time::timeout(std::time::Duration::from_secs(60), rx)
+            .await
+            .map_err(|_| {
+                let request_id = request_id.clone();
+                tokio::spawn(async move {
+                    let mut pending = PENDING_RESULTS.write().await;
+                    pending.remove(&request_id);
+                });
+                WebDriverErrorResponse::javascript_error("Async script timeout")
+            })?
+            .map_err(|_| WebDriverErrorResponse::javascript_error("Channel closed"))?;
+
+        let parsed: serde_json::Value = serde_json::from_str(&result)
+            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+
+        if let Some(success) = parsed.get("success").and_then(|v| v.as_bool()) {
+            if success {
+                return Ok(parsed.get("value").cloned().unwrap_or(serde_json::Value::Null));
+            } else if let Some(error) = parsed.get("error").and_then(|v| v.as_str()) {
+                return Err(WebDriverErrorResponse::javascript_error(error));
+            }
+        }
+
+        Ok(serde_json::Value::Null)
+    }
+
+    /// Get element tag name
+    pub async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
+        let script = format!(
+            r#"
+            var el = window.{};
+            if (!el || !document.contains(el)) {{
+                throw new Error('stale element reference');
+            }}
+            return el.tagName.toLowerCase();
+            "#,
+            js_var
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_string_value(&result)
+    }
+
+    /// Get element property
+    pub async fn get_element_property(
+        &self,
+        js_var: &str,
+        name: &str,
+    ) -> Result<serde_json::Value, WebDriverErrorResponse> {
+        let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
+        let script = format!(
+            r#"
+            var el = window.{};
+            if (!el || !document.contains(el)) {{
+                throw new Error('stale element reference');
+            }}
+            return el['{}'];
+            "#,
+            js_var, escaped_name
+        );
+        let result = self.evaluate_js(&script).await?;
+
+        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+            if success {
+                return Ok(result.get("value").cloned().unwrap_or(serde_json::Value::Null));
+            } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+                return Err(WebDriverErrorResponse::javascript_error(error));
+            }
+        }
+        Ok(serde_json::Value::Null)
+    }
+
+    /// Check if element is enabled
+    pub async fn is_element_enabled(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r#"
+            var el = window.{};
+            if (!el || !document.contains(el)) {{
+                throw new Error('stale element reference');
+            }}
+            return !el.disabled;
+            "#,
+            js_var
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
+
+    /// Take screenshot via canvas
+    pub async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
+        let script = r#"
+            return new Promise((resolve, reject) => {
+                try {
+                    var canvas = document.createElement('canvas');
+                    var ctx = canvas.getContext('2d');
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+
+                    // Use html2canvas-like approach: draw the document
+                    // For a simple screenshot, we use a workaround
+                    // This captures the visible viewport as a blank canvas
+                    // True screenshot requires native API
+
+                    // Fallback: return empty for now, native screenshot needed
+                    resolve('');
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        "#;
+        let result = self.evaluate_js(&format!("return (async () => {{ {} }})();", script)).await?;
+        extract_string_value(&result)
+    }
 }
 
 /// Extract string value from JavaScript result

@@ -56,6 +56,46 @@ impl LocatorStrategy {
         }
     }
 
+    /// Generate JavaScript expression to find multiple elements
+    pub fn to_selector_js_multiple(&self, value: &str) -> String {
+        let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
+
+        match self {
+            LocatorStrategy::CssSelector => {
+                format!("Array.from(document.querySelectorAll('{}'))", escaped)
+            }
+            LocatorStrategy::TagName => {
+                format!("Array.from(document.getElementsByTagName('{}'))", escaped)
+            }
+            LocatorStrategy::XPath => {
+                format!(
+                    r#"(function() {{
+                        var result = [];
+                        var iter = document.evaluate('{}', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+                        var node;
+                        while ((node = iter.iterateNext())) {{
+                            result.push(node);
+                        }}
+                        return result;
+                    }})()"#,
+                    escaped
+                )
+            }
+            LocatorStrategy::LinkText => {
+                format!(
+                    r#"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.trim() === '{}')"#,
+                    escaped
+                )
+            }
+            LocatorStrategy::PartialLinkText => {
+                format!(
+                    r#"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.includes('{}'))"#,
+                    escaped
+                )
+            }
+        }
+    }
+
     /// Generate JavaScript code to find element(s) and store in global variable
     pub fn to_find_js(&self, value: &str, multiple: bool, js_var: &str) -> String {
         let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
