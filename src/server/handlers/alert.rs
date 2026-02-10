@@ -9,15 +9,14 @@ use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriv
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
-pub struct NavigateRequest {
-    pub url: String,
+pub struct SendAlertTextRequest {
+    pub text: String,
 }
 
-/// POST /session/{session_id}/url - Navigate to URL
-pub async fn navigate<R: Runtime + 'static>(
+/// POST /session/{session_id}/alert/dismiss - Dismiss alert
+pub async fn dismiss<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
-    Json(request): Json<NavigateRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
     let session = sessions
@@ -27,13 +26,13 @@ pub async fn navigate<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    executor.navigate(&request.url).await?;
+    executor.dismiss_alert().await?;
 
     Ok(WebDriverResponse::null())
 }
 
-/// GET /session/{session_id}/url - Get current URL
-pub async fn get_url<R: Runtime + 'static>(
+/// POST /session/{session_id}/alert/accept - Accept alert
+pub async fn accept<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -45,46 +44,13 @@ pub async fn get_url<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    let url = executor.get_url().await?;
-    Ok(WebDriverResponse::success(url))
-}
+    executor.accept_alert().await?;
 
-/// GET /session/{session_id}/title - Get page title
-pub async fn get_title<R: Runtime + 'static>(
-    State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
-) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
-    let current_window = session.current_window.clone();
-    drop(sessions);
-
-    let executor = state.get_executor_for_window(&current_window)?;
-    let title = executor.get_title().await?;
-    Ok(WebDriverResponse::success(title))
-}
-
-/// POST /session/{session_id}/back - Navigate back
-pub async fn back<R: Runtime + 'static>(
-    State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
-) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
-    let current_window = session.current_window.clone();
-    drop(sessions);
-
-    let executor = state.get_executor_for_window(&current_window)?;
-    executor.go_back().await?;
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/forward - Navigate forward
-pub async fn forward<R: Runtime + 'static>(
+/// GET /session/{session_id}/alert/text - Get alert text
+pub async fn get_text<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -96,14 +62,16 @@ pub async fn forward<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    executor.go_forward().await?;
-    Ok(WebDriverResponse::null())
+    let text: String = executor.get_alert_text().await?;
+
+    Ok(WebDriverResponse::success(text))
 }
 
-/// POST /session/{session_id}/refresh - Refresh page
-pub async fn refresh<R: Runtime + 'static>(
+/// POST /session/{session_id}/alert/text - Send text to alert (for prompts)
+pub async fn send_text<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
+    Json(request): Json<SendAlertTextRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
     let session = sessions
@@ -113,6 +81,7 @@ pub async fn refresh<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    executor.refresh().await?;
+    executor.send_alert_text(&request.text).await?;
+
     Ok(WebDriverResponse::null())
 }

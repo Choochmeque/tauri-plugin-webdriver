@@ -5,19 +5,19 @@ use axum::Json;
 use serde::Deserialize;
 use tauri::Runtime;
 
+use crate::platform::Cookie;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
-pub struct NavigateRequest {
-    pub url: String,
+pub struct AddCookieRequest {
+    pub cookie: Cookie,
 }
 
-/// POST /session/{session_id}/url - Navigate to URL
-pub async fn navigate<R: Runtime + 'static>(
+/// GET /session/{session_id}/cookie - Get all cookies
+pub async fn get_all<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
-    Json(request): Json<NavigateRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
     let session = sessions
@@ -27,15 +27,59 @@ pub async fn navigate<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    executor.navigate(&request.url).await?;
+    let cookies = executor.get_all_cookies().await?;
+
+    Ok(WebDriverResponse::success(cookies))
+}
+
+/// GET /session/{session_id}/cookie/{name} - Get a specific cookie
+pub async fn get<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, name)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
+    drop(sessions);
+
+    let executor = state.get_executor_for_window(&current_window)?;
+    let cookie = executor.get_cookie(&name).await?;
+
+    match cookie {
+        Some(c) => Ok(WebDriverResponse::success(c)),
+        None => Err(WebDriverErrorResponse::new(
+            axum::http::StatusCode::NOT_FOUND,
+            "no such cookie",
+            &format!("Cookie '{}' not found", name),
+        )),
+    }
+}
+
+/// POST /session/{session_id}/cookie - Add a cookie
+pub async fn add<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path(session_id): Path<String>,
+    Json(request): Json<AddCookieRequest>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
+    drop(sessions);
+
+    let executor = state.get_executor_for_window(&current_window)?;
+    executor.add_cookie(request.cookie).await?;
 
     Ok(WebDriverResponse::null())
 }
 
-/// GET /session/{session_id}/url - Get current URL
-pub async fn get_url<R: Runtime + 'static>(
+/// DELETE /session/{session_id}/cookie/{name} - Delete a specific cookie
+pub async fn delete<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
+    Path((session_id, name)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
     let session = sessions
@@ -45,46 +89,13 @@ pub async fn get_url<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    let url = executor.get_url().await?;
-    Ok(WebDriverResponse::success(url))
-}
+    executor.delete_cookie(&name).await?;
 
-/// GET /session/{session_id}/title - Get page title
-pub async fn get_title<R: Runtime + 'static>(
-    State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
-) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
-    let current_window = session.current_window.clone();
-    drop(sessions);
-
-    let executor = state.get_executor_for_window(&current_window)?;
-    let title = executor.get_title().await?;
-    Ok(WebDriverResponse::success(title))
-}
-
-/// POST /session/{session_id}/back - Navigate back
-pub async fn back<R: Runtime + 'static>(
-    State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
-) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
-    let current_window = session.current_window.clone();
-    drop(sessions);
-
-    let executor = state.get_executor_for_window(&current_window)?;
-    executor.go_back().await?;
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/forward - Navigate forward
-pub async fn forward<R: Runtime + 'static>(
+/// DELETE /session/{session_id}/cookie - Delete all cookies
+pub async fn delete_all<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
@@ -96,23 +107,7 @@ pub async fn forward<R: Runtime + 'static>(
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window)?;
-    executor.go_forward().await?;
-    Ok(WebDriverResponse::null())
-}
+    executor.delete_all_cookies().await?;
 
-/// POST /session/{session_id}/refresh - Refresh page
-pub async fn refresh<R: Runtime + 'static>(
-    State(state): State<Arc<AppState<R>>>,
-    Path(session_id): Path<String>,
-) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
-    let current_window = session.current_window.clone();
-    drop(sessions);
-
-    let executor = state.get_executor_for_window(&current_window)?;
-    executor.refresh().await?;
     Ok(WebDriverResponse::null())
 }

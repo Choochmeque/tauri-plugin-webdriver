@@ -9,6 +9,29 @@ use tauri::Runtime;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
+/// Wait for a window to become available, polling with timeout
+async fn wait_for_window<R: Runtime>(
+    state: &AppState<R>,
+    timeout_ms: u64,
+) -> Result<String, WebDriverErrorResponse> {
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+    let poll_interval = std::time::Duration::from_millis(100);
+
+    loop {
+        let window_labels = state.get_window_labels();
+        if let Some(label) = window_labels.first().cloned() {
+            return Ok(label);
+        }
+
+        if start.elapsed() >= timeout {
+            return Err(WebDriverErrorResponse::no_such_window());
+        }
+
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionRequest {
     pub capabilities: Capabilities,
@@ -35,10 +58,13 @@ pub async fn create<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Json(request): Json<CreateSessionRequest>,
 ) -> WebDriverResult {
+    // Wait for a window to become available (up to 10 seconds)
+    let initial_window = wait_for_window(&state, 10_000).await?;
+
     let mut sessions = state.sessions.write().await;
 
-    // Create session with capabilities
-    let session = sessions.create(request.capabilities.always_match.clone());
+    // Create session with capabilities and initial window
+    let session = sessions.create(request.capabilities.always_match.clone(), initial_window);
 
     let response = SessionResponse {
         session_id: session.id.clone(),

@@ -23,12 +23,13 @@ pub async fn execute_sync<R: Runtime + 'static>(
     Json(request): Json<ExecuteScriptRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let result = executor
         .execute_script(&request.script, &request.args)
         .await?;
@@ -46,9 +47,10 @@ pub async fn execute_async<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let timeout_ms = session.timeouts.script_ms;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let result = executor
         .execute_async_script(&request.script, &request.args, timeout_ms)
         .await?;

@@ -79,12 +79,13 @@ pub async fn perform<R: Runtime + 'static>(
     Json(request): Json<ActionsRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let mut pointer_state = PointerState { x: 0, y: 0 };
 
     for action_seq in &request.actions {

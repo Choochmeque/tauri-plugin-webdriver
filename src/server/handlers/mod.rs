@@ -8,10 +8,13 @@ use super::response::{WebDriverResponse, WebDriverResult};
 use super::AppState;
 
 pub mod actions;
+pub mod alert;
+pub mod cookie;
 pub mod document;
 pub mod element;
 pub mod frame;
 pub mod navigation;
+pub mod print;
 pub mod screenshot;
 pub mod script;
 pub mod session;

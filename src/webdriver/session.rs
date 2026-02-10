@@ -43,13 +43,13 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(capabilities: Value) -> Self {
+    pub fn new(capabilities: Value, initial_window: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             capabilities,
             timeouts: Timeouts::default(),
             elements: ElementStore::new(),
-            current_window: "main".to_string(),
+            current_window: initial_window,
         }
     }
 
@@ -73,8 +73,8 @@ impl SessionManager {
     }
 
     /// Create a new session
-    pub fn create(&mut self, capabilities: Value) -> &Session {
-        let session = Session::new(capabilities);
+    pub fn create(&mut self, capabilities: Value, initial_window: String) -> &Session {
+        let session = Session::new(capabilities, initial_window);
         let id = session.id.clone();
         self.sessions.insert(id.clone(), session);
         self.sessions.get(&id).unwrap()

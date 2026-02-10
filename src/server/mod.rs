@@ -27,15 +27,22 @@ impl<R: Runtime + 'static> AppState<R> {
         }
     }
 
-    /// Get a platform executor for the current window
-    pub fn get_executor(&self) -> Result<Arc<dyn PlatformExecutor>, WebDriverErrorResponse> {
+    /// Get a platform executor for a specific window by label
+    pub fn get_executor_for_window(
+        &self,
+        window_label: &str,
+    ) -> Result<Arc<dyn PlatformExecutor>, WebDriverErrorResponse> {
         self.app
             .webview_windows()
-            .values()
-            .next()
+            .get(window_label)
             .cloned()
             .map(|window| create_executor(window))
             .ok_or_else(WebDriverErrorResponse::no_such_window)
+    }
+
+    /// Get all window labels
+    pub fn get_window_labels(&self) -> Vec<String> {
+        self.app.webview_windows().keys().cloned().collect()
     }
 }
 

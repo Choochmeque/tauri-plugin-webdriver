@@ -204,5 +204,34 @@ pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
             "/session/{session_id}/actions",
             post(handlers::actions::perform::<R>).delete(handlers::actions::release::<R>),
         )
+        // Cookies
+        .route(
+            "/session/{session_id}/cookie",
+            get(handlers::cookie::get_all::<R>)
+                .post(handlers::cookie::add::<R>)
+                .delete(handlers::cookie::delete_all::<R>),
+        )
+        .route(
+            "/session/{session_id}/cookie/{name}",
+            get(handlers::cookie::get::<R>).delete(handlers::cookie::delete::<R>),
+        )
+        // Alerts
+        .route(
+            "/session/{session_id}/alert/dismiss",
+            post(handlers::alert::dismiss::<R>),
+        )
+        .route(
+            "/session/{session_id}/alert/accept",
+            post(handlers::alert::accept::<R>),
+        )
+        .route(
+            "/session/{session_id}/alert/text",
+            get(handlers::alert::get_text::<R>).post(handlers::alert::send_text::<R>),
+        )
+        // Print
+        .route(
+            "/session/{session_id}/print",
+            post(handlers::print::print::<R>),
+        )
         .with_state(state)
 }

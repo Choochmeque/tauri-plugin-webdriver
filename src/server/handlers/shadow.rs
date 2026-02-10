@@ -30,9 +30,10 @@ pub async fn get_shadow_root<R: Runtime + 'static>(
     let shadow_ref = session.elements.store();
     let shadow_js_var = shadow_ref.js_ref.clone();
     let shadow_id = shadow_ref.id.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let found = executor
         .get_element_shadow_root(&element_js_var, &shadow_js_var)
         .await?;
@@ -74,12 +75,13 @@ pub async fn find_element_in_shadow<R: Runtime + 'static>(
     let element_ref = session.elements.store();
     let js_var = element_ref.js_ref.clone();
     let element_id = element_ref.id.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     // Use the locator method that generates expressions expecting `shadow` to be defined
     let strategy_js = strategy.to_selector_js_single_from_shadow(&request.value);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let found = executor
         .find_element_from_shadow(&shadow_js_var, &strategy_js, &js_var)
         .await?;
@@ -109,6 +111,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
         .get(&shadow_id)
         .ok_or_else(|| WebDriverErrorResponse::no_such_shadow_root())?;
     let shadow_js_var = shadow_element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -118,7 +121,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
         ))
     })?;
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let strategy_js = strategy.to_selector_js_from_shadow(&request.value);
 
     // Use a temporary prefix for the trait method

@@ -43,11 +43,12 @@ pub async fn find<R: Runtime + 'static>(
     let element_ref = session.elements.store();
     let js_var = element_ref.js_ref.clone();
     let element_id = element_ref.id.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     let strategy_js = strategy.to_selector_js(&request.value);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let found = executor.find_element(&strategy_js, &js_var).await?;
     if !found {
         return Err(WebDriverErrorResponse::no_such_element());
@@ -65,9 +66,10 @@ pub async fn find_all<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _ = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -77,7 +79,7 @@ pub async fn find_all<R: Runtime + 'static>(
         ))
     })?;
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let strategy_js = strategy.to_selector_js_multiple(&request.value);
 
     // Use a temporary prefix for the trait method
@@ -127,9 +129,10 @@ pub async fn click<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     executor.click_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
@@ -151,9 +154,10 @@ pub async fn clear<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     executor.clear_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
@@ -176,9 +180,10 @@ pub async fn send_keys<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     executor
         .send_keys_to_element(&js_var, &request.text)
         .await?;
@@ -202,9 +207,10 @@ pub async fn get_text<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let text = executor.get_element_text(&js_var).await?;
     Ok(WebDriverResponse::success(text))
 }
@@ -225,9 +231,10 @@ pub async fn get_tag_name<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let tag_name = executor.get_element_tag_name(&js_var).await?;
     Ok(WebDriverResponse::success(tag_name))
 }
@@ -248,9 +255,10 @@ pub async fn get_attribute<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let attr = executor.get_element_attribute(&js_var, &name).await?;
     Ok(WebDriverResponse::success(attr))
 }
@@ -271,9 +279,10 @@ pub async fn get_property<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let prop = executor.get_element_property(&js_var, &name).await?;
     Ok(WebDriverResponse::success(prop))
 }
@@ -294,9 +303,10 @@ pub async fn is_displayed<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let displayed = executor.is_element_displayed(&js_var).await?;
     Ok(WebDriverResponse::success(displayed))
 }
@@ -317,9 +327,10 @@ pub async fn is_enabled<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let enabled = executor.is_element_enabled(&js_var).await?;
     Ok(WebDriverResponse::success(enabled))
 }
@@ -338,9 +349,10 @@ pub async fn get_active<R: Runtime + 'static>(
     let element_ref = session.elements.store();
     let js_var = element_ref.js_ref.clone();
     let element_id = element_ref.id.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let found = executor.get_active_element(&js_var).await?;
     if !found {
         return Err(WebDriverErrorResponse::no_such_element());
@@ -379,12 +391,13 @@ pub async fn find_from_element<R: Runtime + 'static>(
     let element_ref = session.elements.store();
     let js_var = element_ref.js_ref.clone();
     let element_id = element_ref.id.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     // Use the locator method that generates expressions expecting `parent` to be defined
     let strategy_js = strategy.to_selector_js_single_from_element(&request.value);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let found = executor
         .find_element_from_element(&parent_js_var, &strategy_js, &js_var)
         .await?;
@@ -413,6 +426,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
         .get(&parent_element_id)
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
     let parent_js_var = parent_element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -422,7 +436,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
         ))
     })?;
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let strategy_js = strategy.to_selector_js_from_element(&request.value);
 
     // Use a temporary prefix for the trait method
@@ -474,9 +488,10 @@ pub async fn is_selected<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let selected = executor.is_element_selected(&js_var).await?;
     Ok(WebDriverResponse::success(selected))
 }
@@ -497,9 +512,10 @@ pub async fn get_css_value<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let value = executor
         .get_element_css_value(&js_var, &property_name)
         .await?;
@@ -522,9 +538,10 @@ pub async fn get_rect<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let rect = executor.get_element_rect(&js_var).await?;
     Ok(WebDriverResponse::success(json!({
         "x": rect.x,
@@ -550,9 +567,10 @@ pub async fn get_computed_role<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let role = executor.get_element_computed_role(&js_var).await?;
     Ok(WebDriverResponse::success(role))
 }
@@ -573,9 +591,10 @@ pub async fn get_computed_label<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let label = executor.get_element_computed_label(&js_var).await?;
     Ok(WebDriverResponse::success(label))
 }
@@ -596,9 +615,10 @@ pub async fn take_screenshot<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
 
     let js_var = element.js_ref.clone();
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let screenshot = executor.take_element_screenshot(&js_var).await?;
     Ok(WebDriverResponse::success(screenshot))
 }

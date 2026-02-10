@@ -39,17 +39,14 @@ pub async fn get_window_handle<R: Runtime>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    // Return the first window's label as the current window handle
-    if let Some((label, _)) = state.app.webview_windows().iter().next() {
-        Ok(WebDriverResponse::success(label.clone()))
-    } else {
-        Err(WebDriverErrorResponse::no_such_window())
-    }
+    // Return the session's current window handle
+    Ok(WebDriverResponse::success(current_window))
 }
 
 /// GET /session/{session_id}/window/handles - Get all window handles
@@ -75,13 +72,14 @@ pub async fn close_window<R: Runtime>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    // Close the first window
-    if let Some(window) = state.app.webview_windows().values().next().cloned() {
+    // Close the current window
+    if let Some(window) = state.app.webview_windows().get(&current_window).cloned() {
         window
             .close()
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
@@ -142,12 +140,13 @@ pub async fn get_rect<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let rect = executor.get_window_rect().await?;
 
     Ok(WebDriverResponse::success(json!({
@@ -165,12 +164,13 @@ pub async fn set_rect<R: Runtime + 'static>(
     Json(request): Json<WindowRectRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
 
     // Get current rect to fill in missing values
     let current = executor.get_window_rect().await?;
@@ -198,12 +198,13 @@ pub async fn maximize<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let rect = executor.maximize_window().await?;
 
     Ok(WebDriverResponse::success(json!({
@@ -220,12 +221,13 @@ pub async fn minimize<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     executor.minimize_window().await?;
 
     // Return null per W3C spec (minimized window has no meaningful rect)
@@ -238,12 +240,13 @@ pub async fn fullscreen<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let current_window = session.current_window.clone();
     drop(sessions);
 
-    let executor = state.get_executor()?;
+    let executor = state.get_executor_for_window(&current_window)?;
     let rect = executor.fullscreen_window().await?;
 
     Ok(WebDriverResponse::success(json!({
