@@ -16,19 +16,57 @@ pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
         .route("/status", get(handlers::status::<R>))
         // Session management
         .route("/session", post(handlers::session::create::<R>))
-        .route("/session/{session_id}", delete(handlers::session::delete::<R>))
+        .route(
+            "/session/{session_id}",
+            delete(handlers::session::delete::<R>),
+        )
+        // Timeouts
+        .route(
+            "/session/{session_id}/timeouts",
+            get(handlers::timeouts::get::<R>).post(handlers::timeouts::set::<R>),
+        )
         // Navigation
         .route(
             "/session/{session_id}/url",
             get(handlers::navigation::get_url::<R>).post(handlers::navigation::navigate::<R>),
         )
-        .route("/session/{session_id}/title", get(handlers::navigation::get_title::<R>))
-        .route("/session/{session_id}/back", post(handlers::navigation::back::<R>))
-        .route("/session/{session_id}/forward", post(handlers::navigation::forward::<R>))
-        .route("/session/{session_id}/refresh", post(handlers::navigation::refresh::<R>))
+        .route(
+            "/session/{session_id}/title",
+            get(handlers::navigation::get_title::<R>),
+        )
+        .route(
+            "/session/{session_id}/back",
+            post(handlers::navigation::back::<R>),
+        )
+        .route(
+            "/session/{session_id}/forward",
+            post(handlers::navigation::forward::<R>),
+        )
+        .route(
+            "/session/{session_id}/refresh",
+            post(handlers::navigation::refresh::<R>),
+        )
         // Elements
-        .route("/session/{session_id}/element", post(handlers::element::find::<R>))
-        .route("/session/{session_id}/elements", post(handlers::element::find_all::<R>))
+        .route(
+            "/session/{session_id}/element",
+            post(handlers::element::find::<R>),
+        )
+        .route(
+            "/session/{session_id}/elements",
+            post(handlers::element::find_all::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/active",
+            get(handlers::element::get_active::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/element",
+            post(handlers::element::find_from_element::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/elements",
+            post(handlers::element::find_all_from_element::<R>),
+        )
         .route(
             "/session/{session_id}/element/{element_id}/click",
             post(handlers::element::click::<R>),
@@ -58,12 +96,49 @@ pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
             get(handlers::element::get_property::<R>),
         )
         .route(
+            "/session/{session_id}/element/{element_id}/css/{property_name}",
+            get(handlers::element::get_css_value::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/rect",
+            get(handlers::element::get_rect::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/selected",
+            get(handlers::element::is_selected::<R>),
+        )
+        .route(
             "/session/{session_id}/element/{element_id}/displayed",
             get(handlers::element::is_displayed::<R>),
         )
         .route(
             "/session/{session_id}/element/{element_id}/enabled",
             get(handlers::element::is_enabled::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/computedrole",
+            get(handlers::element::get_computed_role::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/computedlabel",
+            get(handlers::element::get_computed_label::<R>),
+        )
+        .route(
+            "/session/{session_id}/element/{element_id}/screenshot",
+            get(handlers::element::take_screenshot::<R>),
+        )
+        // Shadow DOM
+        .route(
+            "/session/{session_id}/element/{element_id}/shadow",
+            get(handlers::shadow::get_shadow_root::<R>),
+        )
+        .route(
+            "/session/{session_id}/shadow/{shadow_id}/element",
+            post(handlers::shadow::find_element_in_shadow::<R>),
+        )
+        .route(
+            "/session/{session_id}/shadow/{shadow_id}/elements",
+            post(handlers::shadow::find_elements_in_shadow::<R>),
         )
         // Execute Script
         .route(
@@ -87,11 +162,42 @@ pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
         // Window
         .route(
             "/session/{session_id}/window",
-            get(handlers::window::get_window_handle::<R>).delete(handlers::window::close_window::<R>),
+            get(handlers::window::get_window_handle::<R>)
+                .post(handlers::window::switch_to_window::<R>)
+                .delete(handlers::window::close_window::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/new",
+            post(handlers::window::new_window::<R>),
         )
         .route(
             "/session/{session_id}/window/handles",
             get(handlers::window::get_window_handles::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/rect",
+            get(handlers::window::get_rect::<R>).post(handlers::window::set_rect::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/maximize",
+            post(handlers::window::maximize::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/minimize",
+            post(handlers::window::minimize::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/fullscreen",
+            post(handlers::window::fullscreen::<R>),
+        )
+        // Frames
+        .route(
+            "/session/{session_id}/frame",
+            post(handlers::frame::switch_to_frame::<R>),
+        )
+        .route(
+            "/session/{session_id}/frame/parent",
+            post(handlers::frame::switch_to_parent_frame::<R>),
         )
         // Actions
         .route(

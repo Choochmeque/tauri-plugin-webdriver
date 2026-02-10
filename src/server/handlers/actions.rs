@@ -3,12 +3,11 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::Deserialize;
-use tauri::{Manager, Runtime};
+use tauri::Runtime;
 
-use crate::platform::WebViewExecutor;
+use crate::platform::PointerEventType;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
-
 
 #[derive(Debug, Deserialize)]
 pub struct ActionsRequest {
@@ -19,10 +18,7 @@ pub struct ActionsRequest {
 #[serde(tag = "type")]
 pub enum ActionSequence {
     #[serde(rename = "key")]
-    Key {
-        id: String,
-        actions: Vec<KeyAction>,
-    },
+    Key { id: String, actions: Vec<KeyAction> },
     #[serde(rename = "pointer")]
     Pointer {
         id: String,
@@ -70,6 +66,12 @@ pub enum PauseAction {
     Pause { duration: Option<u64> },
 }
 
+/// Current pointer position for actions
+struct PointerState {
+    x: i32,
+    y: i32,
+}
+
 /// POST /session/{session_id}/actions - Perform actions
 pub async fn perform<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
@@ -82,51 +84,82 @@ pub async fn perform<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
+    let executor = state.get_executor()?;
+    let mut pointer_state = PointerState { x: 0, y: 0 };
 
-            for action_seq in &request.actions {
-                match action_seq {
-                    ActionSequence::Key { actions, .. } => {
-                        for action in actions {
-                            match action {
-                                KeyAction::KeyDown { value } => {
-                                    executor.dispatch_key_event(value, true).await?;
-                                }
-                                KeyAction::KeyUp { value } => {
-                                    executor.dispatch_key_event(value, false).await?;
-                                }
-                                KeyAction::Pause { duration } => {
-                                    if let Some(ms) = duration {
-                                        tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
-                                    }
-                                }
+    for action_seq in &request.actions {
+        match action_seq {
+            ActionSequence::Key { actions, .. } => {
+                for action in actions {
+                    match action {
+                        KeyAction::KeyDown { value } => {
+                            executor.dispatch_key_event(value, true).await?;
+                        }
+                        KeyAction::KeyUp { value } => {
+                            executor.dispatch_key_event(value, false).await?;
+                        }
+                        KeyAction::Pause { duration } => {
+                            if let Some(ms) = duration {
+                                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
                             }
                         }
                     }
-                    ActionSequence::Pointer { actions, .. } => {
-                        for action in actions {
-                            match action {
-                                PointerAction::Pause { duration } => {
-                                    if let Some(ms) = duration {
-                                        tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
-                                    }
+                }
+            }
+            ActionSequence::Pointer { actions, .. } => {
+                for action in actions {
+                    match action {
+                        PointerAction::PointerDown { button } => {
+                            executor
+                                .dispatch_pointer_event(
+                                    PointerEventType::Down,
+                                    pointer_state.x,
+                                    pointer_state.y,
+                                    *button,
+                                )
+                                .await?;
+                        }
+                        PointerAction::PointerUp { button } => {
+                            executor
+                                .dispatch_pointer_event(
+                                    PointerEventType::Up,
+                                    pointer_state.x,
+                                    pointer_state.y,
+                                    *button,
+                                )
+                                .await?;
+                        }
+                        PointerAction::PointerMove { x, y, duration } => {
+                            pointer_state.x = *x;
+                            pointer_state.y = *y;
+                            if let Some(ms) = duration {
+                                if *ms > 0 {
+                                    tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
                                 }
-                                // TODO: Implement pointer actions
-                                _ => {}
+                            }
+                            executor
+                                .dispatch_pointer_event(
+                                    PointerEventType::Move,
+                                    pointer_state.x,
+                                    pointer_state.y,
+                                    0,
+                                )
+                                .await?;
+                        }
+                        PointerAction::Pause { duration } => {
+                            if let Some(ms) = duration {
+                                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
                             }
                         }
                     }
-                    ActionSequence::None { actions, .. } => {
-                        for action in actions {
-                            match action {
-                                PauseAction::Pause { duration } => {
-                                    if let Some(ms) = duration {
-                                        tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
-                                    }
-                                }
+                }
+            }
+            ActionSequence::None { actions, .. } => {
+                for action in actions {
+                    match action {
+                        PauseAction::Pause { duration } => {
+                            if let Some(ms) = duration {
+                                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
                             }
                         }
                     }
@@ -139,7 +172,7 @@ pub async fn perform<R: Runtime + 'static>(
 }
 
 /// DELETE /session/{session_id}/actions - Release actions
-pub async fn release<R: Runtime>(
+pub async fn release<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {

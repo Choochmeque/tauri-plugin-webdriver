@@ -10,10 +10,13 @@ use super::AppState;
 pub mod actions;
 pub mod document;
 pub mod element;
+pub mod frame;
 pub mod navigation;
 pub mod screenshot;
 pub mod script;
 pub mod session;
+pub mod shadow;
+pub mod timeouts;
 pub mod window;
 
 /// GET /status - WebDriver server status

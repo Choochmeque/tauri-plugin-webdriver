@@ -87,7 +87,11 @@ impl WebDriverErrorResponse {
     }
 
     pub fn javascript_error(message: &str) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "javascript error", message)
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "javascript error",
+            message,
+        )
     }
 
     pub fn unknown_error(message: &str) -> Self {
@@ -96,6 +100,30 @@ impl WebDriverErrorResponse {
 
     pub fn invalid_argument(message: &str) -> Self {
         Self::new(StatusCode::BAD_REQUEST, "invalid argument", message)
+    }
+
+    pub fn unsupported_operation(message: &str) -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unsupported operation",
+            message,
+        )
+    }
+
+    pub fn no_such_frame() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such frame",
+            "No frame could be found",
+        )
+    }
+
+    pub fn no_such_shadow_root() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such shadow root",
+            "Element does not have a shadow root",
+        )
     }
 }
 

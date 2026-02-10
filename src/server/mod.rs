@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::RwLock;
 
@@ -9,6 +9,8 @@ pub mod handlers;
 pub mod response;
 pub mod router;
 
+use crate::platform::{create_executor, PlatformExecutor};
+use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::SessionManager;
 
 /// Shared state for the WebDriver server
@@ -17,12 +19,23 @@ pub struct AppState<R: Runtime> {
     pub sessions: RwLock<SessionManager>,
 }
 
-impl<R: Runtime> AppState<R> {
+impl<R: Runtime + 'static> AppState<R> {
     pub fn new(app: AppHandle<R>) -> Self {
         Self {
             app,
             sessions: RwLock::new(SessionManager::new()),
         }
+    }
+
+    /// Get a platform executor for the current window
+    pub fn get_executor(&self) -> Result<Arc<dyn PlatformExecutor>, WebDriverErrorResponse> {
+        self.app
+            .webview_windows()
+            .values()
+            .next()
+            .cloned()
+            .map(|window| create_executor(window))
+            .ok_or_else(WebDriverErrorResponse::no_such_window)
     }
 }
 
@@ -43,9 +56,7 @@ pub fn start<R: Runtime + 'static>(app: AppHandle<R>, port: u16) {
                 .await
                 .expect("Failed to bind to address");
 
-            axum::serve(listener, router)
-                .await
-                .expect("Server error");
+            axum::serve(listener, router).await.expect("Server error");
         });
     });
 }

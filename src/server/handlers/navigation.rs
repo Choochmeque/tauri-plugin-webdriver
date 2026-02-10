@@ -3,11 +3,8 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::Deserialize;
-use tauri::{Manager, Runtime};
+use tauri::Runtime;
 
-use crate::platform::WebViewExecutor;
-
-#[cfg(target_os = "macos")]
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
@@ -28,26 +25,8 @@ pub async fn navigate<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            executor.navigate(&request.url).await?;
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let script = format!(
-            r#"window.location.href = '{}';"#,
-            request.url.replace('\'', "\\'")
-        );
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&script)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
+    let executor = state.get_executor()?;
+    executor.navigate(&request.url).await?;
 
     Ok(WebDriverResponse::null())
 }
@@ -63,16 +42,9 @@ pub async fn get_url<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let url = executor.get_url().await?;
-            return Ok(WebDriverResponse::success(url));
-        }
-    }
-
-    Ok(WebDriverResponse::success("about:blank"))
+    let executor = state.get_executor()?;
+    let url = executor.get_url().await?;
+    Ok(WebDriverResponse::success(url))
 }
 
 /// GET /session/{session_id}/title - Get page title
@@ -86,16 +58,9 @@ pub async fn get_title<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let title = executor.get_title().await?;
-            return Ok(WebDriverResponse::success(title));
-        }
-    }
-
-    Ok(WebDriverResponse::success(""))
+    let executor = state.get_executor()?;
+    let title = executor.get_title().await?;
+    Ok(WebDriverResponse::success(title))
 }
 
 /// POST /session/{session_id}/back - Navigate back
@@ -109,12 +74,8 @@ pub async fn back<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    if let Some(webview) = state.app.webview_windows().values().next() {
-        webview
-            .eval("window.history.back();")
-            .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-    }
-
+    let executor = state.get_executor()?;
+    executor.go_back().await?;
     Ok(WebDriverResponse::null())
 }
 
@@ -129,12 +90,8 @@ pub async fn forward<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    if let Some(webview) = state.app.webview_windows().values().next() {
-        webview
-            .eval("window.history.forward();")
-            .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-    }
-
+    let executor = state.get_executor()?;
+    executor.go_forward().await?;
     Ok(WebDriverResponse::null())
 }
 
@@ -149,11 +106,7 @@ pub async fn refresh<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    if let Some(webview) = state.app.webview_windows().values().next() {
-        webview
-            .eval("window.location.reload();")
-            .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-    }
-
+    let executor = state.get_executor()?;
+    executor.refresh().await?;
     Ok(WebDriverResponse::null())
 }

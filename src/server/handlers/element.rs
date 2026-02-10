@@ -4,11 +4,8 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
-use tauri::{Manager, Runtime};
+use tauri::Runtime;
 
-use crate::platform::WebViewExecutor;
-
-#[cfg(target_os = "macos")]
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 use crate::webdriver::locator::LocatorStrategy;
@@ -50,35 +47,10 @@ pub async fn find<R: Runtime + 'static>(
 
     let strategy_js = strategy.to_selector_js(&request.value);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let found = executor.find_element(&strategy_js, &js_var).await?;
-            if !found {
-                return Err(WebDriverErrorResponse::no_such_element());
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let js_code = format!(
-            r#"(function() {{
-                var el = {};
-                if (el) {{
-                    window.{} = el;
-                    return true;
-                }}
-                return false;
-            }})()"#,
-            strategy_js, js_var
-        );
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&js_code)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
+    let executor = state.get_executor()?;
+    let found = executor.find_element(&strategy_js, &js_var).await?;
+    if !found {
+        return Err(WebDriverErrorResponse::no_such_element());
     }
 
     Ok(WebDriverResponse::success(json!({
@@ -92,10 +64,11 @@ pub async fn find_all<R: Runtime + 'static>(
     Path(session_id): Path<String>,
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
-    let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
+    let sessions = state.sessions.read().await;
+    let _ = sessions
+        .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
         WebDriverErrorResponse::invalid_argument(&format!(
@@ -104,63 +77,38 @@ pub async fn find_all<R: Runtime + 'static>(
         ))
     })?;
 
-    drop(sessions);
+    let executor = state.get_executor()?;
+    let strategy_js = strategy.to_selector_js_multiple(&request.value);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
+    // Use a temporary prefix for the trait method
+    let temp_prefix = "__wd_temp_";
+    let count = executor.find_elements(&strategy_js, temp_prefix).await?;
 
-            // First, find all elements and get count
-            let count_script = format!(
-                r#"(function() {{
-                    var els = {};
-                    window.__wd_temp_els = els;
-                    return els ? els.length : 0;
-                }})()"#,
-                strategy.to_selector_js_multiple(&request.value)
-            );
+    // Now store each element with proper references
+    let mut elements = Vec::new();
+    let mut sessions = state.sessions.write().await;
+    let session = sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-            let result = executor.evaluate_js(&count_script).await?;
-            let count = if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
-                if success {
-                    result.get("value").and_then(|v| v.as_u64()).unwrap_or(0) as usize
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
+    for i in 0..count {
+        let element_ref = session.elements.store();
+        let js_var = element_ref.js_ref.clone();
+        let element_id = element_ref.id.clone();
 
-            // Store each element reference
-            let mut elements = Vec::new();
-            let mut sessions = state.sessions.write().await;
-            let session = sessions.get_mut(&session_id).ok_or_else(|| {
-                WebDriverErrorResponse::invalid_session_id(&session_id)
-            })?;
+        // Copy from temp storage to element's js_ref
+        let copy_script = format!(
+            "(function() {{ window.{} = window['{}{}'];  return true; }})()",
+            js_var, temp_prefix, i
+        );
+        let _ = executor.evaluate_js(&copy_script).await;
 
-            for i in 0..count {
-                let element_ref = session.elements.store();
-                let js_var = element_ref.js_ref.clone();
-                let element_id = element_ref.id.clone();
-
-                // Store each element in its own global variable
-                let store_script = format!(
-                    "(function() {{ window.{} = window.__wd_temp_els[{}]; return true; }})()",
-                    js_var, i
-                );
-                let _ = executor.evaluate_js(&store_script).await;
-
-                elements.push(json!({
-                    "element-6066-11e4-a52e-4f735466cecf": element_id
-                }));
-            }
-
-            return Ok(WebDriverResponse::success(elements));
-        }
+        elements.push(json!({
+            "element-6066-11e4-a52e-4f735466cecf": element_id
+        }));
     }
 
-    Ok(WebDriverResponse::success(Vec::<serde_json::Value>::new()))
+    Ok(WebDriverResponse::success(elements))
 }
 
 /// POST /session/{session_id}/element/{element_id}/click - Click element
@@ -181,32 +129,8 @@ pub async fn click<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            executor.click_element(&js_var).await?;
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let script = format!(
-            r#"(function() {{
-                var el = window.{};
-                if (!el || !document.contains(el)) return {{ stale: true }};
-                el.scrollIntoView({{ block: 'center', inline: 'center' }});
-                el.click();
-                return {{ success: true }};
-            }})()"#,
-            js_var
-        );
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&script)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
+    let executor = state.get_executor()?;
+    executor.click_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
 }
@@ -229,36 +153,8 @@ pub async fn clear<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            executor.clear_element(&js_var).await?;
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let script = format!(
-            r#"(function() {{
-                var el = window.{};
-                if (!el || !document.contains(el)) return {{ stale: true }};
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                    el.value = '';
-                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                }}
-                return {{ success: true }};
-            }})()"#,
-            js_var
-        );
-
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&script)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
+    let executor = state.get_executor()?;
+    executor.clear_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
 }
@@ -282,39 +178,10 @@ pub async fn send_keys<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            executor.send_keys_to_element(&js_var, &request.text).await?;
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let escaped_text = request.text.replace('\\', "\\\\").replace('`', "\\`");
-        let script = format!(
-            r#"(function() {{
-                var el = window.{};
-                if (!el || !document.contains(el)) return {{ stale: true }};
-                el.focus();
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                    el.value += `{}`;
-                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                }} else if (el.isContentEditable) {{
-                    document.execCommand('insertText', false, `{}`);
-                }}
-                return {{ success: true }};
-            }})()"#,
-            js_var, escaped_text, escaped_text
-        );
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&script)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
+    let executor = state.get_executor()?;
+    executor
+        .send_keys_to_element(&js_var, &request.text)
+        .await?;
 
     Ok(WebDriverResponse::null())
 }
@@ -337,16 +204,9 @@ pub async fn get_text<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let text = executor.get_element_text(&js_var).await?;
-            return Ok(WebDriverResponse::success(text));
-        }
-    }
-
-    Ok(WebDriverResponse::success(""))
+    let executor = state.get_executor()?;
+    let text = executor.get_element_text(&js_var).await?;
+    Ok(WebDriverResponse::success(text))
 }
 
 /// GET /session/{session_id}/element/{element_id}/name - Get element tag name
@@ -367,16 +227,9 @@ pub async fn get_tag_name<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let tag_name = executor.get_element_tag_name(&js_var).await?;
-            return Ok(WebDriverResponse::success(tag_name));
-        }
-    }
-
-    Ok(WebDriverResponse::success(""))
+    let executor = state.get_executor()?;
+    let tag_name = executor.get_element_tag_name(&js_var).await?;
+    Ok(WebDriverResponse::success(tag_name))
 }
 
 /// GET /session/{session_id}/element/{element_id}/attribute/{name} - Get element attribute
@@ -397,16 +250,9 @@ pub async fn get_attribute<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let attr = executor.get_element_attribute(&js_var, &name).await?;
-            return Ok(WebDriverResponse::success(attr));
-        }
-    }
-
-    Ok(WebDriverResponse::null())
+    let executor = state.get_executor()?;
+    let attr = executor.get_element_attribute(&js_var, &name).await?;
+    Ok(WebDriverResponse::success(attr))
 }
 
 /// GET /session/{session_id}/element/{element_id}/property/{name} - Get element property
@@ -427,16 +273,9 @@ pub async fn get_property<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let prop = executor.get_element_property(&js_var, &name).await?;
-            return Ok(WebDriverResponse::success(prop));
-        }
-    }
-
-    Ok(WebDriverResponse::null())
+    let executor = state.get_executor()?;
+    let prop = executor.get_element_property(&js_var, &name).await?;
+    Ok(WebDriverResponse::success(prop))
 }
 
 /// GET /session/{session_id}/element/{element_id}/displayed - Is element displayed
@@ -457,16 +296,9 @@ pub async fn is_displayed<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let displayed = executor.is_element_displayed(&js_var).await?;
-            return Ok(WebDriverResponse::success(displayed));
-        }
-    }
-
-    Ok(WebDriverResponse::success(true))
+    let executor = state.get_executor()?;
+    let displayed = executor.is_element_displayed(&js_var).await?;
+    Ok(WebDriverResponse::success(displayed))
 }
 
 /// GET /session/{session_id}/element/{element_id}/enabled - Is element enabled
@@ -487,14 +319,286 @@ pub async fn is_enabled<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let enabled = executor.is_element_enabled(&js_var).await?;
-            return Ok(WebDriverResponse::success(enabled));
-        }
+    let executor = state.get_executor()?;
+    let enabled = executor.is_element_enabled(&js_var).await?;
+    Ok(WebDriverResponse::success(enabled))
+}
+
+/// GET /session/{session_id}/element/active - Get active element
+pub async fn get_active<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path(session_id): Path<String>,
+) -> WebDriverResult {
+    let mut sessions = state.sessions.write().await;
+    let session = sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    // Store element reference for the active element
+    let element_ref = session.elements.store();
+    let js_var = element_ref.js_ref.clone();
+    let element_id = element_ref.id.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let found = executor.get_active_element(&js_var).await?;
+    if !found {
+        return Err(WebDriverErrorResponse::no_such_element());
     }
 
-    Ok(WebDriverResponse::success(true))
+    Ok(WebDriverResponse::success(json!({
+        "element-6066-11e4-a52e-4f735466cecf": element_id
+    })))
+}
+
+/// POST /session/{session_id}/element/{element_id}/element - Find element from element
+pub async fn find_from_element<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, parent_element_id)): Path<(String, String)>,
+    Json(request): Json<FindElementRequest>,
+) -> WebDriverResult {
+    let mut sessions = state.sessions.write().await;
+    let session = sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let parent_element = session
+        .elements
+        .get(&parent_element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+    let parent_js_var = parent_element.js_ref.clone();
+
+    let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
+        WebDriverErrorResponse::invalid_argument(&format!(
+            "Unknown locator strategy: {}",
+            request.using
+        ))
+    })?;
+
+    // Store element reference and get ID
+    let element_ref = session.elements.store();
+    let js_var = element_ref.js_ref.clone();
+    let element_id = element_ref.id.clone();
+    drop(sessions);
+
+    // Use the locator method that generates expressions expecting `parent` to be defined
+    let strategy_js = strategy.to_selector_js_single_from_element(&request.value);
+
+    let executor = state.get_executor()?;
+    let found = executor
+        .find_element_from_element(&parent_js_var, &strategy_js, &js_var)
+        .await?;
+    if !found {
+        return Err(WebDriverErrorResponse::no_such_element());
+    }
+
+    Ok(WebDriverResponse::success(json!({
+        "element-6066-11e4-a52e-4f735466cecf": element_id
+    })))
+}
+
+/// POST /session/{session_id}/element/{element_id}/elements - Find elements from element
+pub async fn find_all_from_element<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, parent_element_id)): Path<(String, String)>,
+    Json(request): Json<FindElementRequest>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let parent_element = session
+        .elements
+        .get(&parent_element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+    let parent_js_var = parent_element.js_ref.clone();
+    drop(sessions);
+
+    let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
+        WebDriverErrorResponse::invalid_argument(&format!(
+            "Unknown locator strategy: {}",
+            request.using
+        ))
+    })?;
+
+    let executor = state.get_executor()?;
+    let strategy_js = strategy.to_selector_js_from_element(&request.value);
+
+    // Use a temporary prefix for the trait method
+    let temp_prefix = "__wd_temp_";
+    let count = executor
+        .find_elements_from_element(&parent_js_var, &strategy_js, temp_prefix)
+        .await?;
+
+    // Now store each element with proper references
+    let mut elements = Vec::new();
+    let mut sessions = state.sessions.write().await;
+    let session = sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    for i in 0..count {
+        let element_ref = session.elements.store();
+        let js_var = element_ref.js_ref.clone();
+        let element_id = element_ref.id.clone();
+
+        // Copy from temp storage to element's js_ref
+        let copy_script = format!(
+            "(function() {{ window.{} = window['{}{}'];  return true; }})()",
+            js_var, temp_prefix, i
+        );
+        let _ = executor.evaluate_js(&copy_script).await;
+
+        elements.push(json!({
+            "element-6066-11e4-a52e-4f735466cecf": element_id
+        }));
+    }
+
+    Ok(WebDriverResponse::success(elements))
+}
+
+/// GET /session/{session_id}/element/{element_id}/selected - Is element selected
+pub async fn is_selected<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let selected = executor.is_element_selected(&js_var).await?;
+    Ok(WebDriverResponse::success(selected))
+}
+
+/// GET /session/{session_id}/element/{element_id}/css/{property_name} - Get CSS value
+pub async fn get_css_value<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id, property_name)): Path<(String, String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let value = executor
+        .get_element_css_value(&js_var, &property_name)
+        .await?;
+    Ok(WebDriverResponse::success(value))
+}
+
+/// GET /session/{session_id}/element/{element_id}/rect - Get element rect
+pub async fn get_rect<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let rect = executor.get_element_rect(&js_var).await?;
+    Ok(WebDriverResponse::success(json!({
+        "x": rect.x,
+        "y": rect.y,
+        "width": rect.width,
+        "height": rect.height
+    })))
+}
+
+/// GET /session/{session_id}/element/{element_id}/computedrole - Get computed ARIA role
+pub async fn get_computed_role<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let role = executor.get_element_computed_role(&js_var).await?;
+    Ok(WebDriverResponse::success(role))
+}
+
+/// GET /session/{session_id}/element/{element_id}/computedlabel - Get computed accessible name
+pub async fn get_computed_label<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let label = executor.get_element_computed_label(&js_var).await?;
+    Ok(WebDriverResponse::success(label))
+}
+
+/// GET /session/{session_id}/element/{element_id}/screenshot - Take element screenshot
+pub async fn take_screenshot<R: Runtime + 'static>(
+    State(state): State<Arc<AppState<R>>>,
+    Path((session_id, element_id)): Path<(String, String)>,
+) -> WebDriverResult {
+    let sessions = state.sessions.read().await;
+    let session = sessions
+        .get(&session_id)
+        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+
+    let element = session
+        .elements
+        .get(&element_id)
+        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+
+    let js_var = element.js_ref.clone();
+    drop(sessions);
+
+    let executor = state.get_executor()?;
+    let screenshot = executor.take_element_screenshot(&js_var).await?;
+    Ok(WebDriverResponse::success(screenshot))
 }

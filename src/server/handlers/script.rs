@@ -4,11 +4,8 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::Deserialize;
 use serde_json::Value;
-use tauri::{Manager, Runtime};
+use tauri::Runtime;
 
-use crate::platform::WebViewExecutor;
-
-#[cfg(target_os = "macos")]
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
@@ -31,39 +28,11 @@ pub async fn execute_sync<R: Runtime + 'static>(
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let result = executor.execute_script(&request.script, &request.args).await?;
-            return Ok(WebDriverResponse::success(result));
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let args_json = serde_json::to_string(&request.args)
-            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
-
-        let wrapper = format!(
-            r#"
-            (function() {{
-                var args = {};
-                var fn = function() {{ {} }};
-                return fn.apply(null, args);
-            }})()
-            "#,
-            args_json, request.script
-        );
-
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&wrapper)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
-
-    Ok(WebDriverResponse::null())
+    let executor = state.get_executor()?;
+    let result = executor
+        .execute_script(&request.script, &request.args)
+        .await?;
+    Ok(WebDriverResponse::success(result))
 }
 
 /// POST /session/{session_id}/execute/async - Execute asynchronous script
@@ -73,46 +42,15 @@ pub async fn execute_async<R: Runtime + 'static>(
     Json(request): Json<ExecuteScriptRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
+    let session = sessions
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let timeout_ms = session.timeouts.script_ms;
     drop(sessions);
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(window) = state.app.webview_windows().values().next().cloned() {
-            let executor = WebViewExecutor::new(window);
-            let result = executor.execute_async_script(&request.script, &request.args).await?;
-            return Ok(WebDriverResponse::success(result));
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let args_json = serde_json::to_string(&request.args)
-            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
-
-        let wrapper = format!(
-            r#"
-            (function() {{
-                var args = {};
-                var callback = function(result) {{
-                    console.log('Async script result:', result);
-                }};
-                args.push(callback);
-                var fn = function() {{ {} }};
-                fn.apply(null, args);
-            }})()
-            "#,
-            args_json, request.script
-        );
-
-        if let Some(webview) = state.app.webview_windows().values().next() {
-            webview
-                .eval(&wrapper)
-                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-        }
-    }
-
-    Ok(WebDriverResponse::null())
+    let executor = state.get_executor()?;
+    let result = executor
+        .execute_async_script(&request.script, &request.args, timeout_ms)
+        .await?;
+    Ok(WebDriverResponse::success(result))
 }
