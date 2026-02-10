@@ -1,21 +1,13 @@
-use std::collections::HashMap;
+use std::sync::Arc;
 
+use block2::RcBlock;
+use objc2::runtime::AnyObject;
+use objc2_foundation::{NSError, NSString};
+use objc2_web_kit::WKWebView;
 use tauri::{Runtime, WebviewWindow};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::oneshot;
 
 use crate::server::response::WebDriverErrorResponse;
-
-/// Global storage for pending JavaScript evaluation results
-pub static PENDING_RESULTS: std::sync::LazyLock<RwLock<HashMap<String, oneshot::Sender<String>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-
-/// Handle incoming JavaScript result from the webview
-pub async fn handle_js_result(request_id: String, result: String) {
-    let mut pending = PENDING_RESULTS.write().await;
-    if let Some(tx) = pending.remove(&request_id) {
-        let _ = tx.send(result);
-    }
-}
 
 /// Executor for running JavaScript on WKWebView with result retrieval
 #[derive(Clone)]
@@ -24,87 +16,67 @@ pub struct WebViewExecutor<R: Runtime> {
 }
 
 impl<R: Runtime> WebViewExecutor<R> {
-    /// Create a new executor from a Tauri WebviewWindow
     pub fn new(window: WebviewWindow<R>) -> Self {
         Self { window }
     }
 
-    /// Evaluate JavaScript and return the result
-    /// Uses Tauri's IPC to get results back
+    /// Evaluate JavaScript using native WKWebView API and return the result
     pub async fn evaluate_js(
         &self,
         script: &str,
     ) -> Result<serde_json::Value, WebDriverErrorResponse> {
-        let request_id = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel();
+        let script_owned = script.to_string();
 
-        // Store the sender
-        {
-            let mut pending = PENDING_RESULTS.write().await;
-            pending.insert(request_id.clone(), tx);
+        let result = self.window.with_webview(move |webview| {
+            unsafe {
+                let wk_webview: &WKWebView = &*webview.inner().cast();
+                let ns_script = NSString::from_str(&script_owned);
+
+                // Create completion handler block
+                let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+                let block = RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
+                    let response = if !error.is_null() {
+                        let error_ref = &*error;
+                        let description = error_ref.localizedDescription();
+                        Err(description.to_string())
+                    } else if result.is_null() {
+                        Ok(serde_json::Value::Null)
+                    } else {
+                        // Convert NSObject to JSON value
+                        let obj = &*result;
+                        Ok(ns_object_to_json(obj))
+                    };
+
+                    if let Some(tx) = tx.lock().unwrap().take() {
+                        let _ = tx.send(response);
+                    }
+                });
+
+                wk_webview.evaluateJavaScript_completionHandler(&ns_script, Some(&block));
+            }
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::javascript_error(&e.to_string()));
         }
 
-        // Wrap script to send result back via Tauri event
-        let wrapped_script = format!(
-            r#"(async function() {{
-                var requestId = '{}';
-                try {{
-                    var result = (function() {{ {} }})();
-                    if (window.__TAURI__ && window.__TAURI__.event) {{
-                        await window.__TAURI__.event.emit('webdriver-result', {{
-                            requestId: requestId,
-                            success: true,
-                            value: result
-                        }});
-                    }}
-                }} catch (e) {{
-                    if (window.__TAURI__ && window.__TAURI__.event) {{
-                        await window.__TAURI__.event.emit('webdriver-result', {{
-                            requestId: requestId,
-                            success: false,
-                            error: e.message || String(e)
-                        }});
-                    }}
-                }}
-            }})()"#,
-            request_id, script
-        );
-
-        // Execute the script
-        self.window
-            .eval(&wrapped_script)
-            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-
         // Wait for result with timeout
-        let result = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
-            .await
-            .map_err(|_| {
-                // Clean up on timeout
-                let request_id = request_id.clone();
-                tokio::spawn(async move {
-                    let mut pending = PENDING_RESULTS.write().await;
-                    pending.remove(&request_id);
-                });
-                WebDriverErrorResponse::javascript_error("Script timeout")
-            })?
-            .map_err(|_| WebDriverErrorResponse::javascript_error("Channel closed"))?;
-
-        // Parse the result
-        serde_json::from_str(&result)
-            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))
-    }
-
-    /// Simple eval without waiting for result (fire and forget)
-    pub fn eval_no_wait(&self, script: &str) -> Result<(), WebDriverErrorResponse> {
-        self.window
-            .eval(script)
-            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))
+        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+            Ok(Ok(Ok(value))) => Ok(serde_json::json!({
+                "success": true,
+                "value": value
+            })),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::javascript_error("Script timeout")),
+        }
     }
 
     /// Navigate to a URL
     pub async fn navigate(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"window.location.href = '{}'; return true;"#,
+            r#"window.location.href = '{}'; null;"#,
             url.replace('\\', "\\\\").replace('\'', "\\'")
         );
         self.evaluate_js(&script).await?;
@@ -113,20 +85,20 @@ impl<R: Runtime> WebViewExecutor<R> {
 
     /// Get current URL
     pub async fn get_url(&self) -> Result<String, WebDriverErrorResponse> {
-        let result = self.evaluate_js("return window.location.href;").await?;
+        let result = self.evaluate_js("window.location.href").await?;
         extract_string_value(&result)
     }
 
     /// Get page title
     pub async fn get_title(&self) -> Result<String, WebDriverErrorResponse> {
-        let result = self.evaluate_js("return document.title;").await?;
+        let result = self.evaluate_js("document.title").await?;
         extract_string_value(&result)
     }
 
     /// Get page source
     pub async fn get_source(&self) -> Result<String, WebDriverErrorResponse> {
         let result = self
-            .evaluate_js("return document.documentElement.outerHTML;")
+            .evaluate_js("document.documentElement.outerHTML")
             .await?;
         extract_string_value(&result)
     }
@@ -138,14 +110,14 @@ impl<R: Runtime> WebViewExecutor<R> {
         js_var: &str,
     ) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = {};
-            if (el) {{
-                window.{} = el;
-                return true;
-            }}
-            return false;
-            "#,
+            r#"(function() {{
+                var el = {};
+                if (el) {{
+                    window.{} = el;
+                    return true;
+                }}
+                return false;
+            }})()"#,
             strategy_js, js_var
         );
         let result = self.evaluate_js(&script).await?;
@@ -155,13 +127,13 @@ impl<R: Runtime> WebViewExecutor<R> {
     /// Get element text
     pub async fn get_element_text(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            return el.textContent || '';
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el.textContent || '';
+            }})()"#,
             js_var
         );
         let result = self.evaluate_js(&script).await?;
@@ -171,15 +143,15 @@ impl<R: Runtime> WebViewExecutor<R> {
     /// Click element
     pub async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            el.scrollIntoView({{ block: 'center', inline: 'center' }});
-            el.click();
-            return true;
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                el.scrollIntoView({{ block: 'center', inline: 'center' }});
+                el.click();
+                return true;
+            }})()"#,
             js_var
         );
         self.evaluate_js(&script).await?;
@@ -192,24 +164,43 @@ impl<R: Runtime> WebViewExecutor<R> {
         js_var: &str,
         text: &str,
     ) -> Result<(), WebDriverErrorResponse> {
-        let escaped = text.replace('\\', "\\\\").replace('`', "\\`");
+        let escaped = text.replace('\\', "\\\\").replace('`', "\\`").replace('$', "\\$");
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            el.focus();
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                el.value += `{}`;
-                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            }} else if (el.isContentEditable) {{
-                document.execCommand('insertText', false, `{}`);
-            }}
-            return true;
-            "#,
-            js_var, escaped, escaped
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                el.focus();
+
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
+                    // For React controlled inputs, we need to use the native value setter
+                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+                        'value'
+                    ).set;
+
+                    var newValue = el.value + `{}`;
+                    nativeInputValueSetter.call(el, newValue);
+
+                    // Dispatch InputEvent (more specific than Event)
+                    var inputEvent = new InputEvent('input', {{
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: 'insertText',
+                        data: `{}`
+                    }});
+                    el.dispatchEvent(inputEvent);
+
+                    // Also dispatch change event
+                    var changeEvent = new Event('change', {{ bubbles: true }});
+                    el.dispatchEvent(changeEvent);
+                }} else if (el.isContentEditable) {{
+                    document.execCommand('insertText', false, `{}`);
+                }}
+                return true;
+            }})()"#,
+            js_var, escaped, escaped, escaped
         );
         self.evaluate_js(&script).await?;
         Ok(())
@@ -223,13 +214,13 @@ impl<R: Runtime> WebViewExecutor<R> {
     ) -> Result<Option<String>, WebDriverErrorResponse> {
         let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            return el.getAttribute('{}');
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el.getAttribute('{}');
+            }})()"#,
             js_var, escaped_name
         );
         let result = self.evaluate_js(&script).await?;
@@ -248,14 +239,14 @@ impl<R: Runtime> WebViewExecutor<R> {
     /// Check if element is displayed
     pub async fn is_element_displayed(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            var style = window.getComputedStyle(el);
-            return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                var style = window.getComputedStyle(el);
+                return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+            }})()"#,
             js_var
         );
         let result = self.evaluate_js(&script).await?;
@@ -272,11 +263,11 @@ impl<R: Runtime> WebViewExecutor<R> {
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
         let wrapper = format!(
-            r#"
-            var args = {};
-            var fn = function() {{ {} }};
-            return fn.apply(null, args);
-            "#,
+            r#"(function() {{
+                var args = {};
+                var fn = function() {{ {} }};
+                return fn.apply(null, args);
+            }})()"#,
             args_json, script
         );
         let result = self.evaluate_js(&wrapper).await?;
@@ -298,77 +289,30 @@ impl<R: Runtime> WebViewExecutor<R> {
         script: &str,
         args: &[serde_json::Value],
     ) -> Result<serde_json::Value, WebDriverErrorResponse> {
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let (tx, rx) = oneshot::channel();
-
-        // Store the sender
-        {
-            let mut pending = PENDING_RESULTS.write().await;
-            pending.insert(request_id.clone(), tx);
-        }
-
         let args_json = serde_json::to_string(args)
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
-        // For async scripts, the last argument is the callback that resolves the promise
+        // For async scripts, we return a Promise and resolve it with the callback
         let wrapper = format!(
-            r#"(async function() {{
-                var requestId = '{}';
+            r#"new Promise(function(resolve, reject) {{
                 try {{
                     var args = {};
-                    var resolveResult;
-                    var callback = function(result) {{
-                        resolveResult = result;
-                    }};
-                    args.push(callback);
+                    args.push(function(result) {{ resolve(result); }});
                     var fn = function() {{ {} }};
-                    await fn.apply(null, args);
-                    // Give callback a moment to be called
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                    if (window.__TAURI__ && window.__TAURI__.event) {{
-                        await window.__TAURI__.event.emit('webdriver-result', {{
-                            requestId: requestId,
-                            success: true,
-                            value: resolveResult
-                        }});
-                    }}
+                    fn.apply(null, args);
                 }} catch (e) {{
-                    if (window.__TAURI__ && window.__TAURI__.event) {{
-                        await window.__TAURI__.event.emit('webdriver-result', {{
-                            requestId: requestId,
-                            success: false,
-                            error: e.message || String(e)
-                        }});
-                    }}
+                    reject(e);
                 }}
-            }})()"#,
-            request_id, args_json, script
+            }})"#,
+            args_json, script
         );
 
-        self.window
-            .eval(&wrapper)
-            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+        let result = self.evaluate_js(&wrapper).await?;
 
-        // Wait for result with timeout (async scripts may take longer)
-        let result = tokio::time::timeout(std::time::Duration::from_secs(60), rx)
-            .await
-            .map_err(|_| {
-                let request_id = request_id.clone();
-                tokio::spawn(async move {
-                    let mut pending = PENDING_RESULTS.write().await;
-                    pending.remove(&request_id);
-                });
-                WebDriverErrorResponse::javascript_error("Async script timeout")
-            })?
-            .map_err(|_| WebDriverErrorResponse::javascript_error("Channel closed"))?;
-
-        let parsed: serde_json::Value = serde_json::from_str(&result)
-            .map_err(|e| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
-
-        if let Some(success) = parsed.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
             if success {
-                return Ok(parsed.get("value").cloned().unwrap_or(serde_json::Value::Null));
-            } else if let Some(error) = parsed.get("error").and_then(|v| v.as_str()) {
+                return Ok(result.get("value").cloned().unwrap_or(serde_json::Value::Null));
+            } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
                 return Err(WebDriverErrorResponse::javascript_error(error));
             }
         }
@@ -379,13 +323,13 @@ impl<R: Runtime> WebViewExecutor<R> {
     /// Get element tag name
     pub async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            return el.tagName.toLowerCase();
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el.tagName.toLowerCase();
+            }})()"#,
             js_var
         );
         let result = self.evaluate_js(&script).await?;
@@ -400,13 +344,13 @@ impl<R: Runtime> WebViewExecutor<R> {
     ) -> Result<serde_json::Value, WebDriverErrorResponse> {
         let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            return el['{}'];
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el['{}'];
+            }})()"#,
             js_var, escaped_name
         );
         let result = self.evaluate_js(&script).await?;
@@ -424,44 +368,262 @@ impl<R: Runtime> WebViewExecutor<R> {
     /// Check if element is enabled
     pub async fn is_element_enabled(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"
-            var el = window.{};
-            if (!el || !document.contains(el)) {{
-                throw new Error('stale element reference');
-            }}
-            return !el.disabled;
-            "#,
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return !el.disabled;
+            }})()"#,
             js_var
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
     }
 
-    /// Take screenshot via canvas
+    /// Take screenshot via canvas (placeholder - needs native implementation)
     pub async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
-        let script = r#"
-            return new Promise((resolve, reject) => {
-                try {
-                    var canvas = document.createElement('canvas');
-                    var ctx = canvas.getContext('2d');
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-
-                    // Use html2canvas-like approach: draw the document
-                    // For a simple screenshot, we use a workaround
-                    // This captures the visible viewport as a blank canvas
-                    // True screenshot requires native API
-
-                    // Fallback: return empty for now, native screenshot needed
-                    resolve('');
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        "#;
-        let result = self.evaluate_js(&format!("return (async () => {{ {} }})();", script)).await?;
-        extract_string_value(&result)
+        // TODO: Use WKWebView.takeSnapshotWithConfiguration for proper screenshots
+        Ok(String::new())
     }
+
+    /// Dispatch a key event (keydown/keyup)
+    pub async fn dispatch_key_event(
+        &self,
+        key: &str,
+        is_down: bool,
+    ) -> Result<(), WebDriverErrorResponse> {
+        // Map WebDriver key codes to JavaScript key values
+        // WebDriver uses Unicode Private Use Area for special keys
+        let (js_key, js_code, key_code) = match key {
+            "\u{E007}" => ("Enter", "Enter", 13),           // Enter
+            "\u{E003}" => ("Backspace", "Backspace", 8),    // Backspace
+            "\u{E004}" => ("Tab", "Tab", 9),                // Tab
+            "\u{E006}" => ("Enter", "NumpadEnter", 13),     // Return (numpad enter)
+            "\u{E00C}" => ("Escape", "Escape", 27),         // Escape
+            "\u{E00D}" => (" ", "Space", 32),               // Space
+            "\u{E012}" => ("ArrowLeft", "ArrowLeft", 37),   // Left arrow
+            "\u{E013}" => ("ArrowUp", "ArrowUp", 38),       // Up arrow
+            "\u{E014}" => ("ArrowRight", "ArrowRight", 39), // Right arrow
+            "\u{E015}" => ("ArrowDown", "ArrowDown", 40),   // Down arrow
+            "\u{E017}" => ("Delete", "Delete", 46),         // Delete
+            "\u{E031}" => ("F1", "F1", 112),                // F1
+            "\u{E032}" => ("F2", "F2", 113),                // F2
+            "\u{E033}" => ("F3", "F3", 114),                // F3
+            "\u{E034}" => ("F4", "F4", 115),                // F4
+            "\u{E035}" => ("F5", "F5", 116),                // F5
+            "\u{E036}" => ("F6", "F6", 117),                // F6
+            "\u{E037}" => ("F7", "F7", 118),                // F7
+            "\u{E038}" => ("F8", "F8", 119),                // F8
+            "\u{E039}" => ("F9", "F9", 120),                // F9
+            "\u{E03A}" => ("F10", "F10", 121),              // F10
+            "\u{E03B}" => ("F11", "F11", 122),              // F11
+            "\u{E03C}" => ("F12", "F12", 123),              // F12
+            "\u{E008}" => ("Shift", "ShiftLeft", 16),       // Shift
+            "\u{E009}" => ("Control", "ControlLeft", 17),   // Control
+            "\u{E00A}" => ("Alt", "AltLeft", 18),           // Alt
+            "\u{E03D}" => ("Meta", "MetaLeft", 91),         // Meta/Command
+            _ => {
+                // Regular character key
+                let ch = key.chars().next().unwrap_or(' ');
+                let code = if ch.is_ascii_alphabetic() {
+                    format!("Key{}", ch.to_ascii_uppercase())
+                } else if ch.is_ascii_digit() {
+                    format!("Digit{}", ch)
+                } else {
+                    key.to_string()
+                };
+                // Return a tuple with owned Strings that we handle specially
+                return self.dispatch_regular_key(key, &code, is_down).await;
+            }
+        };
+
+        let event_type = if is_down { "keydown" } else { "keyup" };
+        let script = format!(
+            r#"(function() {{
+                var event = new KeyboardEvent('{}', {{
+                    key: '{}',
+                    code: '{}',
+                    keyCode: {},
+                    which: {},
+                    bubbles: true,
+                    cancelable: true
+                }});
+                var activeEl = document.activeElement || document.body;
+                activeEl.dispatchEvent(event);
+                return true;
+            }})()"#,
+            event_type, js_key, js_code, key_code, key_code
+        );
+
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
+
+    /// Dispatch a regular character key event
+    async fn dispatch_regular_key(
+        &self,
+        key: &str,
+        code: &str,
+        is_down: bool,
+    ) -> Result<(), WebDriverErrorResponse> {
+        let ch = key.chars().next().unwrap_or(' ');
+        let key_code = ch as u32;
+        let event_type = if is_down { "keydown" } else { "keyup" };
+
+        let escaped_key = key.replace('\\', "\\\\").replace('\'', "\\'");
+        let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
+
+        let script = format!(
+            r#"(function() {{
+                var event = new KeyboardEvent('{}', {{
+                    key: '{}',
+                    code: '{}',
+                    keyCode: {},
+                    which: {},
+                    bubbles: true,
+                    cancelable: true
+                }});
+                var activeEl = document.activeElement || document.body;
+                activeEl.dispatchEvent(event);
+                return true;
+            }})()"#,
+            event_type, escaped_key, escaped_code, key_code, key_code
+        );
+
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
+
+    /// Clear element content
+    pub async fn clear_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
+        let script = format!(
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                el.focus();
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
+                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+                        'value'
+                    ).set;
+                    nativeInputValueSetter.call(el, '');
+                    var inputEvent = new InputEvent('input', {{
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: 'deleteContentBackward'
+                    }});
+                    el.dispatchEvent(inputEvent);
+                    var changeEvent = new Event('change', {{ bubbles: true }});
+                    el.dispatchEvent(changeEvent);
+                }} else if (el.isContentEditable) {{
+                    el.innerHTML = '';
+                }}
+                return true;
+            }})()"#,
+            js_var
+        );
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
+}
+
+/// Convert an NSObject to a JSON value
+unsafe fn ns_object_to_json(obj: &AnyObject) -> serde_json::Value {
+    use objc2_foundation::NSString as NSStr;
+
+    let class = obj.class();
+    let class_name = class.name();
+
+    // Check for NSString
+    if class_name.contains("String") {
+        let ns_str: &NSStr = &*(obj as *const AnyObject as *const NSStr);
+        return serde_json::Value::String(ns_str.to_string());
+    }
+
+    // Check for NSNumber (includes booleans)
+    if class_name.contains("Number") || class_name.contains("Boolean") {
+        // Use message sending to get values since NSNumber API varies
+        use objc2::msg_send;
+        use objc2::runtime::Bool;
+
+        // Try to get as bool first (for __NSCFBoolean)
+        if class_name.contains("Boolean") {
+            let bool_val: Bool = msg_send![obj, boolValue];
+            return serde_json::Value::Bool(bool_val.as_bool());
+        }
+
+        // Try as double
+        let double_val: f64 = msg_send![obj, doubleValue];
+        let int_val: i64 = msg_send![obj, longLongValue];
+
+        // Check if it's an integer
+        if (int_val as f64 - double_val).abs() < f64::EPSILON {
+            return serde_json::Value::Number(serde_json::Number::from(int_val));
+        } else if let Some(n) = serde_json::Number::from_f64(double_val) {
+            return serde_json::Value::Number(n);
+        }
+        return serde_json::Value::Null;
+    }
+
+    // Check for NSArray
+    if class_name.contains("Array") {
+        use objc2::msg_send;
+
+        let count: usize = msg_send![obj, count];
+        let mut arr = Vec::new();
+        for i in 0..count {
+            let item: *mut AnyObject = msg_send![obj, objectAtIndex: i];
+            if !item.is_null() {
+                arr.push(ns_object_to_json(&*item));
+            }
+        }
+        return serde_json::Value::Array(arr);
+    }
+
+    // Check for NSDictionary
+    if class_name.contains("Dictionary") {
+        use objc2::msg_send;
+
+        let keys: *mut AnyObject = msg_send![obj, allKeys];
+        if keys.is_null() {
+            return serde_json::Value::Object(serde_json::Map::new());
+        }
+
+        let count: usize = msg_send![keys, count];
+        let mut map = serde_json::Map::new();
+
+        for i in 0..count {
+            let key: *mut AnyObject = msg_send![keys, objectAtIndex: i];
+            if key.is_null() {
+                continue;
+            }
+
+            let key_class = (&*key).class().name();
+            if !key_class.contains("String") {
+                continue;
+            }
+
+            let ns_key: &NSStr = &*(key as *const AnyObject as *const NSStr);
+            let key_str = ns_key.to_string();
+
+            let val: *mut AnyObject = msg_send![obj, objectForKey: key];
+            if !val.is_null() {
+                map.insert(key_str, ns_object_to_json(&*val));
+            }
+        }
+        return serde_json::Value::Object(map);
+    }
+
+    // Check for NSNull
+    if class_name.contains("Null") {
+        return serde_json::Value::Null;
+    }
+
+    // Default
+    serde_json::Value::Null
 }
 
 /// Extract string value from JavaScript result
@@ -494,3 +656,4 @@ fn extract_bool_value(result: &serde_json::Value) -> Result<bool, WebDriverError
     }
     Ok(false)
 }
+

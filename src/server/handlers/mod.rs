@@ -7,12 +7,14 @@ use tauri::Runtime;
 use super::response::{WebDriverResponse, WebDriverResult};
 use super::AppState;
 
+pub mod actions;
 pub mod document;
 pub mod element;
 pub mod navigation;
 pub mod screenshot;
 pub mod script;
 pub mod session;
+pub mod window;
 
 /// GET /status - WebDriver server status
 pub async fn status<R: Runtime>(_state: State<Arc<AppState<R>>>) -> WebDriverResult {

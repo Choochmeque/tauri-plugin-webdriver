@@ -114,11 +114,11 @@ pub async fn find_all<R: Runtime + 'static>(
 
             // First, find all elements and get count
             let count_script = format!(
-                r#"
-                var els = {};
-                window.__wd_temp_els = els;
-                return els ? els.length : 0;
-                "#,
+                r#"(function() {{
+                    var els = {};
+                    window.__wd_temp_els = els;
+                    return els ? els.length : 0;
+                }})()"#,
                 strategy.to_selector_js_multiple(&request.value)
             );
 
@@ -147,7 +147,7 @@ pub async fn find_all<R: Runtime + 'static>(
 
                 // Store each element in its own global variable
                 let store_script = format!(
-                    "window.{} = window.__wd_temp_els[{}]; return true;",
+                    "(function() {{ window.{} = window.__wd_temp_els[{}]; return true; }})()",
                     js_var, i
                 );
                 let _ = executor.evaluate_js(&store_script).await;
@@ -230,24 +230,35 @@ pub async fn clear<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     drop(sessions);
 
-    let script = format!(
-        r#"(function() {{
-            var el = window.{};
-            if (!el || !document.contains(el)) return {{ stale: true }};
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                el.value = '';
-                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            }}
-            return {{ success: true }};
-        }})()"#,
-        js_var
-    );
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(window) = state.app.webview_windows().values().next().cloned() {
+            let executor = WebViewExecutor::new(window);
+            executor.clear_element(&js_var).await?;
+        }
+    }
 
-    if let Some(webview) = state.app.webview_windows().values().next() {
-        webview
-            .eval(&script)
-            .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+    #[cfg(not(target_os = "macos"))]
+    {
+        let script = format!(
+            r#"(function() {{
+                var el = window.{};
+                if (!el || !document.contains(el)) return {{ stale: true }};
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
+                    el.value = '';
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                }}
+                return {{ success: true }};
+            }})()"#,
+            js_var
+        );
+
+        if let Some(webview) = state.app.webview_windows().values().next() {
+            webview
+                .eval(&script)
+                .map_err(|e: tauri::Error| WebDriverErrorResponse::javascript_error(&e.to_string()))?;
+        }
     }
 
     Ok(WebDriverResponse::null())

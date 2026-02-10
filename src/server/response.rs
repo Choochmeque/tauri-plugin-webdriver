@@ -78,6 +78,14 @@ impl WebDriverErrorResponse {
         )
     }
 
+    pub fn no_such_window() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such window",
+            "No window could be found",
+        )
+    }
+
     pub fn javascript_error(message: &str) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "javascript error", message)
     }

@@ -21,8 +21,9 @@ tracing = "0.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSString", "NSData", "NSURL"] }
-objc2-web-kit = { version = "0.2", features = ["WKWebView", "WKWebsiteDataStore", "WKHTTPCookieStore"] }
+objc2-foundation = { version = "0.2", features = ["NSString", "NSData", "NSURL", "NSError"] }
+objc2-app-kit = { version = "0.2" }
+objc2-web-kit = { version = "0.2", features = ["WKWebView", "WKWebsiteDataStore", "WKHTTPCookieStore", "block2", "objc2-app-kit"] }
 block2 = "0.5"
 
 [build-dependencies]

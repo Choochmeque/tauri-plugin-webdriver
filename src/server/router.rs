@@ -84,5 +84,19 @@ pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
             "/session/{session_id}/source",
             get(handlers::document::get_source::<R>),
         )
+        // Window
+        .route(
+            "/session/{session_id}/window",
+            get(handlers::window::get_window_handle::<R>).delete(handlers::window::close_window::<R>),
+        )
+        .route(
+            "/session/{session_id}/window/handles",
+            get(handlers::window::get_window_handles::<R>),
+        )
+        // Actions
+        .route(
+            "/session/{session_id}/actions",
+            post(handlers::actions::perform::<R>).delete(handlers::actions::release::<R>),
+        )
         .with_state(state)
 }

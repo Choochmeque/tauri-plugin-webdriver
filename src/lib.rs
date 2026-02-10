@@ -1,6 +1,6 @@
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    Listener, Manager, Runtime,
+    Manager, Runtime,
 };
 
 pub use models::*;
@@ -39,18 +39,6 @@ impl<R: Runtime, T: Manager<R>> crate::WebdriverExt<R> for T {
     }
 }
 
-/// Payload for JavaScript result events
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WebDriverResultPayload {
-    request_id: String,
-    success: bool,
-    #[serde(default)]
-    value: serde_json::Value,
-    #[serde(default)]
-    error: Option<String>,
-}
-
 /// Initializes the plugin.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("webdriver")
@@ -61,34 +49,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             #[cfg(desktop)]
             let webdriver = desktop::init(app, api)?;
             app.manage(webdriver);
-
-            // Set up event listener for JavaScript results
-            #[cfg(target_os = "macos")]
-            {
-                let app_handle = app.app_handle().clone();
-                app_handle.listen("webdriver-result", move |event| {
-                    if let Ok(payload) = serde_json::from_str::<WebDriverResultPayload>(event.payload()) {
-                        let result = if payload.success {
-                            serde_json::json!({
-                                "success": true,
-                                "value": payload.value
-                            })
-                        } else {
-                            serde_json::json!({
-                                "success": false,
-                                "error": payload.error.unwrap_or_default()
-                            })
-                        };
-
-                        // Send result to waiting handler
-                        let request_id = payload.request_id;
-                        let result_str = result.to_string();
-                        tauri::async_runtime::spawn(async move {
-                            platform::macos::handle_js_result(request_id, result_str).await;
-                        });
-                    }
-                });
-            }
 
             // Start the WebDriver HTTP server
             #[cfg(desktop)]
