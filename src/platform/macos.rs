@@ -100,38 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn clear_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                el.focus();
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
-                        'value'
-                    ).set;
-                    nativeInputValueSetter.call(el, '');
-                    var inputEvent = new InputEvent('input', {{
-                        bubbles: true,
-                        cancelable: true,
-                        inputType: 'deleteContentBackward'
-                    }});
-                    el.dispatchEvent(inputEvent);
-                    var changeEvent = new Event('change', {{ bubbles: true }});
-                    el.dispatchEvent(changeEvent);
-                }} else if (el.isContentEditable) {{
-                    el.innerHTML = '';
-                }}
-                return true;
-            }})()"
-        );
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
     async fn send_keys_to_element(
         &self,
         js_var: &str,
