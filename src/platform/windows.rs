@@ -1,19 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use base64::Engine as _;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
-    ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2ExecuteScriptCompletedHandler,
-    ICoreWebView2ExecuteScriptCompletedHandler_Impl, COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG,
+    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2ExecuteScriptCompletedHandler_Impl,
 };
-use windows::core::{implement, Interface, HSTRING, PCWSTR};
+use windows::core::{implement, HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
-use windows::Win32::System::WinRT::IMemoryBufferByteAccess;
 
 use crate::platform::{
     Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
