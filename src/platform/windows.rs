@@ -1192,7 +1192,7 @@ impl ExecuteScriptHandler {
     }
 }
 
-impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Impl {
+impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler {
     fn Invoke(
         &self,
         errorcode: windows::core::HRESULT,
@@ -1228,7 +1228,7 @@ impl CapturePreviewHandler {
     }
 }
 
-impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler_Impl {
+impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler {
     fn Invoke(&self, errorcode: windows::core::HRESULT) -> windows::core::Result<()> {
         let response = if errorcode.is_err() {
             Err(format!("Capture preview failed: {:?}", errorcode))
