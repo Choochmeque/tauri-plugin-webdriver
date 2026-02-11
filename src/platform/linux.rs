@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use javascriptcore::prelude::ValueExt;
+use javascriptcore::auto::value::ValueExt;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
