@@ -4,12 +4,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
-    ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2ExecuteScriptCompletedHandler,
-    ICoreWebView2ExecuteScriptCompletedHandler_Impl,
-};
-use windows::core::implement;
+use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
@@ -1189,7 +1184,16 @@ type CaptureResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<St
 mod handlers {
     #![allow(clippy::inline_always, clippy::ref_as_ptr)]
 
-    use super::*;
+    use serde_json::Value;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2CapturePreviewCompletedHandler,
+        ICoreWebView2CapturePreviewCompletedHandler_Impl,
+        ICoreWebView2ExecuteScriptCompletedHandler,
+        ICoreWebView2ExecuteScriptCompletedHandler_Impl,
+    };
+    use windows::core::implement;
+
+    use super::{CaptureResultSender, ScriptResultSender};
 
     #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
     pub struct ExecuteScriptHandler {
