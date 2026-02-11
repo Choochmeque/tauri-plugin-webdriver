@@ -246,15 +246,7 @@ pub trait PlatformExecutor: Send + Sync {
             }})()"
         );
         let result = self.evaluate_js(&script).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-                return Err(WebDriverErrorResponse::javascript_error(error));
-            }
-        }
-        Ok(Value::Null)
+        extract_value(&result)
     }
 
     /// Get element CSS property value
@@ -585,15 +577,7 @@ pub trait PlatformExecutor: Send + Sync {
             }})()"
         );
         let result = self.evaluate_js(&script).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                if let Some(count) = result.get("value").and_then(Value::as_u64) {
-                    return Ok(usize::try_from(count).unwrap_or(0));
-                }
-            }
-        }
-        Ok(0)
+        extract_usize_value(&result)
     }
 
     // =========================================================================
@@ -635,16 +619,7 @@ pub trait PlatformExecutor: Send + Sync {
             }})()"
         );
         let result = self.evaluate_js(&wrapper).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-                return Err(WebDriverErrorResponse::javascript_error(error));
-            }
-        }
-
-        Ok(Value::Null)
+        extract_value(&result)
     }
 
     /// Execute asynchronous JavaScript with callback
@@ -688,16 +663,7 @@ pub trait PlatformExecutor: Send + Sync {
         );
 
         let result = self.evaluate_js(&wrapper).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-                return Err(WebDriverErrorResponse::javascript_error(error));
-            }
-        }
-
-        Ok(Value::Null)
+        extract_value(&result)
     }
 
     // =========================================================================
@@ -1116,4 +1082,16 @@ fn extract_usize_value(result: &Value) -> Result<usize, WebDriverErrorResponse> 
         }
     }
     Ok(0)
+}
+
+/// Extract raw Value from JavaScript result
+fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            return Ok(result.get("value").cloned().unwrap_or(Value::Null));
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error));
+        }
+    }
+    Ok(Value::Null)
 }
