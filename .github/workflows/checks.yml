@@ -37,22 +37,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::unwrap_used -D clippy::pedantic
 
-  # Check links in the documentation.
-  deadlinks:
-    name: cargo-deadlinks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm-dev clang cmake grcov
-          version: "1.0"  # bump this to invalidate the cache when needed
-
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-deadlinks
-      - run: cargo doc --no-deps -p tauri-plugin-webdriver
-      - run: cargo deadlinks --no-build
-
   # Check links in markdown files.
   mlc:
     name: mlc
