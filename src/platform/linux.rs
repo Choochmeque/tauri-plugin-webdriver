@@ -104,38 +104,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
     // Shadow DOM
     // =========================================================================
 
-    async fn find_elements_from_shadow(
-        &self,
-        shadow_var: &str,
-        strategy_js: &str,
-        js_var_prefix: &str,
-    ) -> Result<usize, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var shadow = window.{shadow_var};
-                if (!shadow) {{
-                    throw new Error('no such shadow root');
-                }}
-                var elements = {strategy_js};
-                var count = elements.length;
-                for (var i = 0; i < count; i++) {{
-                    window['{js_var_prefix}' + i] = elements[i];
-                }}
-                return count;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                if let Some(count) = result.get("value").and_then(Value::as_u64) {
-                    return Ok(usize::try_from(count).unwrap_or(0));
-                }
-            }
-        }
-        Ok(0)
-    }
-
     // =========================================================================
     // Script Execution
     // =========================================================================
