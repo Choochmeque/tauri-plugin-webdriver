@@ -92,58 +92,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Script Execution
     // =========================================================================
 
-    async fn execute_async_script(
-        &self,
-        script: &str,
-        args: &[Value],
-    ) -> Result<Value, WebDriverErrorResponse> {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
-
-        let wrapper = format!(
-            r"new Promise(function(resolve, reject) {{
-                try {{
-                    var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-                    function deserializeArg(arg) {{
-                        if (arg === null || arg === undefined) return arg;
-                        if (Array.isArray(arg)) return arg.map(deserializeArg);
-                        if (typeof arg === 'object') {{
-                            if (arg[ELEMENT_KEY]) {{
-                                var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
-                                if (!el) throw new Error('stale element reference');
-                                return el;
-                            }}
-                            var result = {{}};
-                            for (var key in arg) {{
-                                if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
-                            }}
-                            return result;
-                        }}
-                        return arg;
-                    }}
-                    var args = {args_json}.map(deserializeArg);
-                    args.push(function(result) {{ resolve(result); }});
-                    var fn = function() {{ {script} }};
-                    fn.apply(null, args);
-                }} catch (e) {{
-                    reject(e);
-                }}
-            }})"
-        );
-
-        let result = self.evaluate_js(&wrapper).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-                return Err(WebDriverErrorResponse::javascript_error(error));
-            }
-        }
-
-        Ok(Value::Null)
-    }
-
     // =========================================================================
     // Screenshots
     // =========================================================================
