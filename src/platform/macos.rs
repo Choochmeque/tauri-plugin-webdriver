@@ -100,33 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn get_element_property(
-        &self,
-        js_var: &str,
-        name: &str,
-    ) -> Result<Value, WebDriverErrorResponse> {
-        let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                return el['{escaped_name}'];
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-                return Err(WebDriverErrorResponse::javascript_error(error));
-            }
-        }
-        Ok(Value::Null)
-    }
-
     async fn get_element_css_value(
         &self,
         js_var: &str,
