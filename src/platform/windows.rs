@@ -84,30 +84,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn find_element_from_element(
-        &self,
-        parent_js_var: &str,
-        strategy_js: &str,
-        js_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var parent = window.{parent_js_var};
-                if (!parent || !document.contains(parent)) {{
-                    throw new Error('stale element reference');
-                }}
-                var el = {strategy_js};
-                if (el) {{
-                    window.{js_var} = el;
-                    return true;
-                }}
-                return false;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_bool_value(&result)
-    }
-
     async fn find_elements_from_element(
         &self,
         parent_js_var: &str,

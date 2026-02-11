@@ -119,7 +119,24 @@ pub trait PlatformExecutor: Send + Sync {
         parent_js_var: &str,
         strategy_js: &str,
         js_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse>;
+    ) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var parent = window.{parent_js_var};
+                if (!parent || !document.contains(parent)) {{
+                    throw new Error('stale element reference');
+                }}
+                var el = {strategy_js};
+                if (el) {{
+                    window.{js_var} = el;
+                    return true;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Find multiple elements from a parent element
     /// Returns count of elements found, stores as {prefix}0, {prefix}1, etc.
