@@ -333,7 +333,25 @@ pub trait PlatformExecutor: Send + Sync {
     }
 
     /// Check if element is selected (for checkboxes, radio buttons, options)
-    async fn is_element_selected(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse>;
+    async fn is_element_selected(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {{
+                    return el.checked;
+                }}
+                if (el.tagName === 'OPTION') {{
+                    return el.selected;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Click on element
     async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse>;
