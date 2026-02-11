@@ -65,7 +65,12 @@ pub trait PlatformExecutor: Send + Sync {
     // =========================================================================
 
     /// Get page source HTML
-    async fn get_source(&self) -> Result<String, WebDriverErrorResponse>;
+    async fn get_source(&self) -> Result<String, WebDriverErrorResponse> {
+        let result = self
+            .evaluate_js("document.documentElement.outerHTML")
+            .await?;
+        extract_string_value(&result)
+    }
 
     // =========================================================================
     // Element Operations

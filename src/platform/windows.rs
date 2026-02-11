@@ -68,29 +68,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     }
 
     // =========================================================================
-    // Document
-    // =========================================================================
-
-    async fn get_source(&self) -> Result<String, WebDriverErrorResponse> {
-        let result = self
-            .evaluate_js("document.documentElement.outerHTML")
-            .await?;
-        extract_string_value(&result)
-    }
-
-    // =========================================================================
-    // Element Operations
-    // =========================================================================
-
-    // =========================================================================
-    // Shadow DOM
-    // =========================================================================
-
-    // =========================================================================
-    // Script Execution
-    // =========================================================================
-
-    // =========================================================================
     // Screenshots
     // =========================================================================
 
@@ -487,23 +464,3 @@ mod handlers {
 }
 
 use handlers::{CapturePreviewHandler, ExecuteScriptHandler};
-
-// =============================================================================
-// Utility Functions
-// =============================================================================
-
-fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
-    if let Some(success) = result.get("success").and_then(Value::as_bool) {
-        if success {
-            if let Some(value) = result.get("value") {
-                if let Some(s) = value.as_str() {
-                    return Ok(s.to_string());
-                }
-                return Ok(value.to_string());
-            }
-        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
-        }
-    }
-    Ok(String::new())
-}
