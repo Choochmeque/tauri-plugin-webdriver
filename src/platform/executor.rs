@@ -538,7 +538,24 @@ pub trait PlatformExecutor: Send + Sync {
         shadow_var: &str,
         strategy_js: &str,
         js_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse>;
+    ) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var shadow = window.{shadow_var};
+                if (!shadow) {{
+                    throw new Error('no such shadow root');
+                }}
+                var el = {strategy_js};
+                if (el) {{
+                    window.{js_var} = el;
+                    return true;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Find multiple elements within a shadow root
     async fn find_elements_from_shadow(
