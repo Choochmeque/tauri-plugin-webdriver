@@ -50,7 +50,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
             let handler = ExecuteScriptHandler::new(tx);
 
             webview2
-                .ExecuteScript(PCWSTR(script_hstring.as_ptr()), &handler)
+                .ExecuteScript(PCWSTR(script_hstring.as_ptr()), handler)
                 .ok();
         });
 
