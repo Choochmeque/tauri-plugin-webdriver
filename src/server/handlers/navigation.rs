@@ -5,7 +5,7 @@ use axum::Json;
 use serde::Deserialize;
 use tauri::Runtime;
 
-use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
+use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -20,9 +20,7 @@ pub async fn navigate<R: Runtime + 'static>(
     Json(request): Json<NavigateRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -39,9 +37,7 @@ pub async fn get_url<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -57,9 +53,7 @@ pub async fn get_title<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -75,9 +69,7 @@ pub async fn back<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -93,9 +85,7 @@ pub async fn forward<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -111,9 +101,7 @@ pub async fn refresh<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);

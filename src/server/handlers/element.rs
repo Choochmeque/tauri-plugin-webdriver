@@ -28,9 +28,7 @@ pub async fn find<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
         WebDriverErrorResponse::invalid_argument(&format!(
@@ -67,9 +65,7 @@ pub async fn find_all<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -91,9 +87,7 @@ pub async fn find_all<R: Runtime + 'static>(
     // Now store each element with proper references
     let mut elements = Vec::new();
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     for i in 0..count {
         let element_ref = session.elements.store();
@@ -120,9 +114,7 @@ pub async fn click<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -146,9 +138,7 @@ pub async fn clear<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -173,9 +163,7 @@ pub async fn send_keys<R: Runtime + 'static>(
     Json(request): Json<SendKeysRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -201,9 +189,7 @@ pub async fn get_text<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -226,9 +212,7 @@ pub async fn get_tag_name<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -251,9 +235,7 @@ pub async fn get_attribute<R: Runtime + 'static>(
     Path((session_id, element_id, name)): Path<(String, String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -276,9 +258,7 @@ pub async fn get_property<R: Runtime + 'static>(
     Path((session_id, element_id, name)): Path<(String, String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -301,9 +281,7 @@ pub async fn is_displayed<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -326,9 +304,7 @@ pub async fn is_enabled<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -351,9 +327,7 @@ pub async fn get_active<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     // Store element reference for the active element
     let element_ref = session.elements.store();
@@ -381,9 +355,7 @@ pub async fn find_from_element<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     let parent_element = session
         .elements
@@ -429,9 +401,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let parent_element = session
         .elements
@@ -461,9 +431,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
     // Now store each element with proper references
     let mut elements = Vec::new();
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     for i in 0..count {
         let element_ref = session.elements.store();
@@ -490,9 +458,7 @@ pub async fn is_selected<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -515,9 +481,7 @@ pub async fn get_css_value<R: Runtime + 'static>(
     Path((session_id, element_id, property_name)): Path<(String, String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -542,9 +506,7 @@ pub async fn get_rect<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -572,9 +534,7 @@ pub async fn get_computed_role<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -597,9 +557,7 @@ pub async fn get_computed_label<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements
@@ -622,9 +580,7 @@ pub async fn take_screenshot<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let element = session
         .elements

@@ -22,9 +22,7 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
     Json(request): Json<SwitchFrameRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     // Parse the frame ID
     let frame_id = match &request.id {
@@ -82,9 +80,7 @@ pub async fn switch_to_parent_frame<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);

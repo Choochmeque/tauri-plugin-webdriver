@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use tauri::Runtime;
 
-use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
+use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 /// GET `/session/{session_id}/source` - Get page source
@@ -12,9 +12,7 @@ pub async fn get_source<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);

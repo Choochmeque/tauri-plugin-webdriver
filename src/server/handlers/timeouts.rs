@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::Runtime;
 
-use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
+use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -25,9 +25,7 @@ pub async fn get<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     Ok(WebDriverResponse::success(json!({
         "implicit": session.timeouts.implicit_ms,
@@ -43,9 +41,7 @@ pub async fn set<R: Runtime + 'static>(
     Json(request): Json<TimeoutsRequest>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     if let Some(implicit) = request.implicit {
         session.timeouts.implicit_ms = implicit;

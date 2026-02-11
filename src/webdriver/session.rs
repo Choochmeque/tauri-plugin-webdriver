@@ -4,6 +4,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::element::ElementStore;
+use crate::server::response::WebDriverErrorResponse;
 
 /// Session timeouts configuration
 #[derive(Debug, Clone, Serialize)]
@@ -73,13 +74,17 @@ impl SessionManager {
     }
 
     /// Get a session by ID
-    pub fn get(&self, id: &str) -> Option<&Session> {
-        self.sessions.get(id)
+    pub fn get(&self, id: &str) -> Result<&Session, WebDriverErrorResponse> {
+        self.sessions
+            .get(id)
+            .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(id))
     }
 
     /// Get a mutable session by ID
-    pub fn get_mut(&mut self, id: &str) -> Option<&mut Session> {
-        self.sessions.get_mut(id)
+    pub fn get_mut(&mut self, id: &str) -> Result<&mut Session, WebDriverErrorResponse> {
+        self.sessions
+            .get_mut(id)
+            .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(id))
     }
 
     /// Delete a session

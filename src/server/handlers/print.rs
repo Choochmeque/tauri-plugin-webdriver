@@ -6,7 +6,7 @@ use serde::Deserialize;
 use tauri::Runtime;
 
 use crate::platform::PrintOptions;
-use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
+use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 #[derive(Debug, Default, Deserialize)]
@@ -60,9 +60,7 @@ pub async fn print<R: Runtime + 'static>(
     Json(request): Json<PrintRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);

@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::Runtime;
 
-use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
+use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -23,9 +23,7 @@ pub async fn execute_sync<R: Runtime + 'static>(
     Json(request): Json<ExecuteScriptRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -44,9 +42,7 @@ pub async fn execute_async<R: Runtime + 'static>(
     Json(request): Json<ExecuteScriptRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);

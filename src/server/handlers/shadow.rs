@@ -16,9 +16,7 @@ pub async fn get_shadow_root<R: Runtime + 'static>(
     Path((session_id, element_id)): Path<(String, String)>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     let element = session
         .elements
@@ -55,9 +53,7 @@ pub async fn find_element_in_shadow<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     // Shadow roots are stored in the same element store
     let shadow_element = session
@@ -104,9 +100,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
     Json(request): Json<FindElementRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
 
     let shadow_element = session
         .elements
@@ -136,9 +130,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
     // Now store each element with proper references
     let mut elements = Vec::new();
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     for i in 0..count {
         let element_ref = session.elements.store();

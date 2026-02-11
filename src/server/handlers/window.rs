@@ -40,9 +40,7 @@ pub async fn get_window_handle<R: Runtime>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     drop(sessions);
 
@@ -56,9 +54,7 @@ pub async fn get_window_handles<R: Runtime>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let _session = sessions.get(&session_id)?;
     drop(sessions);
 
     // Return all window labels as handles
@@ -73,9 +69,7 @@ pub async fn close_window<R: Runtime>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     drop(sessions);
 
@@ -101,9 +95,7 @@ pub async fn switch_to_window<R: Runtime>(
     Json(request): Json<SwitchWindowRequest>,
 ) -> WebDriverResult {
     let mut sessions = state.sessions.write().await;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get_mut(&session_id)?;
 
     // Verify the window exists
     if !state.app.webview_windows().contains_key(&request.handle) {
@@ -123,9 +115,7 @@ pub async fn new_window<R: Runtime + 'static>(
     Json(_request): Json<NewWindowRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let _session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let _session = sessions.get(&session_id)?;
     drop(sessions);
 
     // Note: Creating new windows in Tauri requires app-specific logic
@@ -141,9 +131,7 @@ pub async fn get_rect<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -166,9 +154,7 @@ pub async fn set_rect<R: Runtime + 'static>(
     Json(request): Json<WindowRectRequest>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -201,9 +187,7 @@ pub async fn maximize<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -225,9 +209,7 @@ pub async fn minimize<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
@@ -245,9 +227,7 @@ pub async fn fullscreen<R: Runtime + 'static>(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let sessions = state.sessions.read().await;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
+    let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     drop(sessions);
