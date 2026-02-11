@@ -100,52 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn send_keys_to_element(
-        &self,
-        js_var: &str,
-        text: &str,
-    ) -> Result<(), WebDriverErrorResponse> {
-        let escaped = text
-            .replace('\\', "\\\\")
-            .replace('`', "\\`")
-            .replace('$', "\\$");
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                el.focus();
-
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {{
-                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
-                        'value'
-                    ).set;
-
-                    var newValue = el.value + `{escaped}`;
-                    nativeInputValueSetter.call(el, newValue);
-
-                    var inputEvent = new InputEvent('input', {{
-                        bubbles: true,
-                        cancelable: true,
-                        inputType: 'insertText',
-                        data: `{escaped}`
-                    }});
-                    el.dispatchEvent(inputEvent);
-
-                    var changeEvent = new Event('change', {{ bubbles: true }});
-                    el.dispatchEvent(changeEvent);
-                }} else if (el.isContentEditable) {{
-                    document.execCommand('insertText', false, `{escaped}`);
-                }}
-                return true;
-            }})()"
-        );
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
     async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
             r"(function() {{
