@@ -145,7 +145,24 @@ pub trait PlatformExecutor: Send + Sync {
         parent_js_var: &str,
         strategy_js: &str,
         js_var_prefix: &str,
-    ) -> Result<usize, WebDriverErrorResponse>;
+    ) -> Result<usize, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var parent = window.{parent_js_var};
+                if (!parent || !document.contains(parent)) {{
+                    throw new Error('stale element reference');
+                }}
+                var elements = {strategy_js};
+                var count = elements.length;
+                for (var i = 0; i < count; i++) {{
+                    window['{js_var_prefix}' + i] = elements[i];
+                }}
+                return count;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_usize_value(&result)
+    }
 
     /// Get element text content
     async fn get_element_text(&self, js_var: &str) -> Result<String, WebDriverErrorResponse>;
