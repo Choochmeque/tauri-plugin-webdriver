@@ -273,6 +273,35 @@ The following locator strategies are supported:
 
 The WebDriver server runs on port `4445` by default. The server binds to `127.0.0.1` for security.
 
+### Custom Port
+
+You can configure the port in two ways:
+
+**1. Environment variable:**
+
+```bash
+TAURI_WEBDRIVER_PORT=9515 cargo tauri dev
+```
+
+**2. Programmatically:**
+
+```rust
+fn main() {
+    let builder = tauri::Builder::default();
+
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(tauri_plugin_webdriver::init_with_port(9515));
+
+    builder
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+The port resolution order is:
+1. `init_with_port(port)` - uses the specified port (ignores env var)
+2. `init()` - checks `TAURI_WEBDRIVER_PORT` env var, falls back to 4445
+
 ## Development
 
 ```bash

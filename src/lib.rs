@@ -16,13 +16,33 @@ mod webdriver;
 pub use error::{Error, Result};
 
 /// Default port for the `WebDriver` HTTP server
-const DEFAULT_PORT: u16 = 4445;
+pub const DEFAULT_PORT: u16 = 4445;
 
-/// Initializes the plugin.
+/// Environment variable name for configuring the port
+pub const PORT_ENV_VAR: &str = "TAURI_WEBDRIVER_PORT";
+
+/// Initializes the plugin with default settings.
+///
+/// The port is determined in the following order:
+/// 1. `TAURI_WEBDRIVER_PORT` environment variable (if set and valid)
+/// 2. Default port (4445)
 #[must_use]
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
+    let port = std::env::var(PORT_ENV_VAR)
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(DEFAULT_PORT);
+
+    init_with_port(port)
+}
+
+/// Initializes the plugin with a custom port.
+///
+/// This ignores the `TAURI_WEBDRIVER_PORT` environment variable.
+#[must_use]
+pub fn init_with_port<R: Runtime>(port: u16) -> TauriPlugin<R> {
     Builder::new("webdriver")
-        .setup(|app, api| {
+        .setup(move |app, api| {
             #[cfg(mobile)]
             let webdriver = mobile::init(app, api)?;
             #[cfg(desktop)]
@@ -31,8 +51,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
             // Start the WebDriver HTTP server
             let app_handle = app.app_handle().clone();
-            server::start(app_handle, DEFAULT_PORT);
-            tracing::info!("WebDriver plugin initialized on port {DEFAULT_PORT}");
+            server::start(app_handle, port);
+            tracing::info!("WebDriver plugin initialized on port {port}");
 
             Ok(())
         })
