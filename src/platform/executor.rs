@@ -513,7 +513,24 @@ pub trait PlatformExecutor: Send + Sync {
         &self,
         js_var: &str,
         shadow_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse>;
+    ) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                var shadow = el.shadowRoot;
+                if (shadow) {{
+                    window.{shadow_var} = shadow;
+                    return true;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Find element within a shadow root
     async fn find_element_from_shadow(

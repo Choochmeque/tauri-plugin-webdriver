@@ -88,29 +88,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Shadow DOM
     // =========================================================================
 
-    async fn get_element_shadow_root(
-        &self,
-        js_var: &str,
-        shadow_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                var shadow = el.shadowRoot;
-                if (shadow) {{
-                    window.{shadow_var} = shadow;
-                    return true;
-                }}
-                return false;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_bool_value(&result)
-    }
-
     async fn find_element_from_shadow(
         &self,
         shadow_var: &str,
