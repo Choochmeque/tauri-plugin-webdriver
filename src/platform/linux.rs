@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use glib;
-use javascriptcore::ValueExt;
+use javascriptcore::prelude::ValueExt;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webkit2gtk::gio::Cancellable;
-use webkit2gtk::{JavascriptResult, WebViewExt};
+use webkit2gtk::{Error as WebKitError, JavascriptResult, WebViewExt};
 
 use crate::platform::{
     Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
@@ -40,17 +39,21 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
             let webview = webview.inner();
             let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
+            #[allow(deprecated)]
             webview.run_javascript(
                 &script_owned,
                 None::<&Cancellable>,
-                move |result: Result<JavascriptResult, glib::Error>| {
+                move |result: Result<JavascriptResult, WebKitError>| {
                     let response: Result<Value, String> = match result {
                         Ok(js_result) => {
                             if let Some(js_value) = js_result.js_value() {
-                                let json_str = js_value.to_json(0);
-                                match serde_json::from_str::<Value>(json_str.as_str()) {
-                                    Ok(value) => Ok(value),
-                                    Err(_) => Ok(Value::String(json_str.to_string())),
+                                if let Some(json_str) = js_value.to_json(0) {
+                                    match serde_json::from_str::<Value>(json_str.as_str()) {
+                                        Ok(value) => Ok(value),
+                                        Err(_) => Ok(Value::String(json_str.to_string())),
+                                    }
+                                } else {
+                                    Ok(Value::Null)
                                 }
                             } else {
                                 Ok(Value::Null)
