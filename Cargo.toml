@@ -1,8 +1,12 @@
 [package]
 name = "tauri-plugin-webdriver"
 version = "0.1.0"
-authors = [ "You" ]
+authors = ["You"]
 description = "W3C WebDriver implementation for Tauri applications"
+license = "MIT"
+repository = "https://github.com/Choochmeque/tauri-plugin-webdriver"
+keywords = ["tauri", "webdriver", "selenium", "testing", "automation"]
+categories = ["development-tools::testing", "gui"]
 edition = "2021"
 rust-version = "1.90"
 exclude = ["/examples"]
