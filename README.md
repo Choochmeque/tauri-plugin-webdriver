@@ -1,5 +1,9 @@
 # tauri-plugin-webdriver
 
+[![Crates.io](https://img.shields.io/crates/v/tauri-plugin-webdriver.svg)](https://crates.io/crates/tauri-plugin-webdriver)
+[![Documentation](https://docs.rs/tauri-plugin-webdriver/badge.svg)](https://docs.rs/tauri-plugin-webdriver)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A W3C WebDriver implementation for Tauri applications, enabling automated testing with standard WebDriver clients like Selenium, WebdriverIO, and Playwright.
 
 ## Features
