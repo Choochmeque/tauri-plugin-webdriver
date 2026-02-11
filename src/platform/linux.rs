@@ -100,33 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn find_elements(
-        &self,
-        strategy_js: &str,
-        js_var_prefix: &str,
-    ) -> Result<usize, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var elements = {strategy_js};
-                var count = elements.length;
-                for (var i = 0; i < count; i++) {{
-                    window['{js_var_prefix}' + i] = elements[i];
-                }}
-                return count;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-
-        if let Some(success) = result.get("success").and_then(Value::as_bool) {
-            if success {
-                if let Some(count) = result.get("value").and_then(Value::as_u64) {
-                    return Ok(usize::try_from(count).unwrap_or(0));
-                }
-            }
-        }
-        Ok(0)
-    }
-
     async fn find_element_from_element(
         &self,
         parent_js_var: &str,

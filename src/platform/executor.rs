@@ -97,7 +97,20 @@ pub trait PlatformExecutor: Send + Sync {
         &self,
         strategy_js: &str,
         js_var_prefix: &str,
-    ) -> Result<usize, WebDriverErrorResponse>;
+    ) -> Result<usize, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var elements = {strategy_js};
+                var count = elements.length;
+                for (var i = 0; i < count; i++) {{
+                    window['{js_var_prefix}' + i] = elements[i];
+                }}
+                return count;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_usize_value(&result)
+    }
 
     /// Find element from a parent element and store reference
     /// Returns true if element was found
@@ -464,4 +477,18 @@ fn extract_bool_value(result: &Value) -> Result<bool, WebDriverErrorResponse> {
         }
     }
     Ok(false)
+}
+
+/// Extract usize value from JavaScript result
+fn extract_usize_value(result: &Value) -> Result<usize, WebDriverErrorResponse> {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            if let Some(count) = result.get("value").and_then(Value::as_u64) {
+                return Ok(usize::try_from(count).unwrap_or(0));
+            }
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error));
+        }
+    }
+    Ok(0)
 }
