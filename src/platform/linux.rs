@@ -100,23 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn get_element_computed_label(
-        &self,
-        js_var: &str,
-    ) -> Result<String, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                return el.computedName || el.getAttribute('aria-label') || el.innerText || '';
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_string_value(&result)
-    }
-
     // =========================================================================
     // Shadow DOM
     // =========================================================================
