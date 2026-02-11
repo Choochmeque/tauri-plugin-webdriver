@@ -16,7 +16,7 @@ pub struct ExecuteScriptRequest {
     pub args: Vec<Value>,
 }
 
-/// POST /session/{session_id}/execute/sync - Execute synchronous script
+/// POST `/session/{session_id}/execute/sync` - Execute synchronous script
 pub async fn execute_sync<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -36,7 +36,7 @@ pub async fn execute_sync<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(result))
 }
 
-/// POST /session/{session_id}/execute/async - Execute asynchronous script
+/// POST `/session/{session_id}/execute/async` - Execute asynchronous script
 pub async fn execute_async<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

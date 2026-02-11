@@ -19,7 +19,7 @@ pub struct TimeoutsRequest {
     pub script: Option<u64>,
 }
 
-/// GET /session/{session_id}/timeouts - Get session timeouts
+/// GET `/session/{session_id}/timeouts` - Get session timeouts
 pub async fn get<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -36,7 +36,7 @@ pub async fn get<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/timeouts - Set session timeouts
+/// POST `/session/{session_id}/timeouts` - Set session timeouts
 pub async fn set<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

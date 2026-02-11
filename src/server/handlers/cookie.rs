@@ -14,7 +14,7 @@ pub struct AddCookieRequest {
     pub cookie: Cookie,
 }
 
-/// GET /session/{session_id}/cookie - Get all cookies
+/// GET `/session/{session_id}/cookie` - Get all cookies
 pub async fn get_all<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -32,7 +32,7 @@ pub async fn get_all<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(cookies))
 }
 
-/// GET /session/{session_id}/cookie/{name} - Get a specific cookie
+/// GET `/session/{session_id}/cookie/{name}` - Get a specific cookie
 pub async fn get<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, name)): Path<(String, String)>,
@@ -52,12 +52,12 @@ pub async fn get<R: Runtime + 'static>(
         None => Err(WebDriverErrorResponse::new(
             axum::http::StatusCode::NOT_FOUND,
             "no such cookie",
-            &format!("Cookie '{}' not found", name),
+            &format!("Cookie '{name}' not found"),
         )),
     }
 }
 
-/// POST /session/{session_id}/cookie - Add a cookie
+/// POST `/session/{session_id}/cookie` - Add a cookie
 pub async fn add<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -76,7 +76,7 @@ pub async fn add<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// DELETE /session/{session_id}/cookie/{name} - Delete a specific cookie
+/// DELETE `/session/{session_id}/cookie/{name}` - Delete a specific cookie
 pub async fn delete<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, name)): Path<(String, String)>,
@@ -94,7 +94,7 @@ pub async fn delete<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// DELETE /session/{session_id}/cookie - Delete all cookies
+/// DELETE `/session/{session_id}/cookie` - Delete all cookies
 pub async fn delete_all<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

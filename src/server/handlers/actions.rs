@@ -78,7 +78,7 @@ struct PointerState {
     y: i32,
 }
 
-/// POST /session/{session_id}/actions - Perform actions
+/// POST `/session/{session_id}/actions` - Perform actions
 pub async fn perform<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -178,7 +178,7 @@ pub async fn perform<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// DELETE /session/{session_id}/actions - Release actions
+/// DELETE `/session/{session_id}/actions` - Release actions
 pub async fn release<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

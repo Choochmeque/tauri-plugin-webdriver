@@ -21,7 +21,7 @@ pub struct SendKeysRequest {
     pub text: String,
 }
 
-/// POST /session/{session_id}/element - Find element
+/// POST `/session/{session_id}/element` - Find element
 pub async fn find<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -59,7 +59,7 @@ pub async fn find<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/elements - Find multiple elements
+/// POST `/session/{session_id}/elements` - Find multiple elements
 pub async fn find_all<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -100,8 +100,7 @@ pub async fn find_all<R: Runtime + 'static>(
 
         // Copy from temp storage to element's js_ref
         let copy_script = format!(
-            "(function() {{ window.{} = window['{}{}'];  return true; }})()",
-            js_var, temp_prefix, i
+            "(function() {{ window.{js_var} = window['{temp_prefix}{i}'];  return true; }})()"
         );
         let _ = executor.evaluate_js(&copy_script).await;
 
@@ -113,7 +112,7 @@ pub async fn find_all<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(elements))
 }
 
-/// POST /session/{session_id}/element/{element_id}/click - Click element
+/// POST `/session/{session_id}/element/{element_id}/click` - Click element
 pub async fn click<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -138,7 +137,7 @@ pub async fn click<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/element/{element_id}/clear - Clear element
+/// POST `/session/{session_id}/element/{element_id}/clear` - Clear element
 pub async fn clear<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -163,7 +162,7 @@ pub async fn clear<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/element/{element_id}/value - Send keys to element
+/// POST `/session/{session_id}/element/{element_id}/value` - Send keys to element
 pub async fn send_keys<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -191,7 +190,7 @@ pub async fn send_keys<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// GET /session/{session_id}/element/{element_id}/text - Get element text
+/// GET `/session/{session_id}/element/{element_id}/text` - Get element text
 pub async fn get_text<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -215,7 +214,7 @@ pub async fn get_text<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(text))
 }
 
-/// GET /session/{session_id}/element/{element_id}/name - Get element tag name
+/// GET `/session/{session_id}/element/{element_id}/name` - Get element tag name
 pub async fn get_tag_name<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -239,7 +238,7 @@ pub async fn get_tag_name<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(tag_name))
 }
 
-/// GET /session/{session_id}/element/{element_id}/attribute/{name} - Get element attribute
+/// GET `/session/{session_id}/element/{element_id}/attribute/{name}` - Get element attribute
 pub async fn get_attribute<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id, name)): Path<(String, String, String)>,
@@ -263,7 +262,7 @@ pub async fn get_attribute<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(attr))
 }
 
-/// GET /session/{session_id}/element/{element_id}/property/{name} - Get element property
+/// GET `/session/{session_id}/element/{element_id}/property/{name}` - Get element property
 pub async fn get_property<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id, name)): Path<(String, String, String)>,
@@ -287,7 +286,7 @@ pub async fn get_property<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(prop))
 }
 
-/// GET /session/{session_id}/element/{element_id}/displayed - Is element displayed
+/// GET `/session/{session_id}/element/{element_id}/displayed` - Is element displayed
 pub async fn is_displayed<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -311,7 +310,7 @@ pub async fn is_displayed<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(displayed))
 }
 
-/// GET /session/{session_id}/element/{element_id}/enabled - Is element enabled
+/// GET `/session/{session_id}/element/{element_id}/enabled` - Is element enabled
 pub async fn is_enabled<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -335,7 +334,7 @@ pub async fn is_enabled<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(enabled))
 }
 
-/// GET /session/{session_id}/element/active - Get active element
+/// GET `/session/{session_id}/element/active` - Get active element
 pub async fn get_active<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -363,7 +362,7 @@ pub async fn get_active<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/element/{element_id}/element - Find element from element
+/// POST `/session/{session_id}/element/{element_id}/element` - Find element from element
 pub async fn find_from_element<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, parent_element_id)): Path<(String, String)>,
@@ -410,7 +409,7 @@ pub async fn find_from_element<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/element/{element_id}/elements - Find elements from element
+/// POST `/session/{session_id}/element/{element_id}/elements` - Find elements from element
 pub async fn find_all_from_element<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, parent_element_id)): Path<(String, String)>,
@@ -459,8 +458,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
 
         // Copy from temp storage to element's js_ref
         let copy_script = format!(
-            "(function() {{ window.{} = window['{}{}'];  return true; }})()",
-            js_var, temp_prefix, i
+            "(function() {{ window.{js_var} = window['{temp_prefix}{i}'];  return true; }})()"
         );
         let _ = executor.evaluate_js(&copy_script).await;
 
@@ -472,7 +470,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(elements))
 }
 
-/// GET /session/{session_id}/element/{element_id}/selected - Is element selected
+/// GET `/session/{session_id}/element/{element_id}/selected` - Is element selected
 pub async fn is_selected<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -496,7 +494,7 @@ pub async fn is_selected<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(selected))
 }
 
-/// GET /session/{session_id}/element/{element_id}/css/{property_name} - Get CSS value
+/// GET `/session/{session_id}/element/{element_id}/css/{property_name}` - Get CSS value
 pub async fn get_css_value<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id, property_name)): Path<(String, String, String)>,
@@ -522,7 +520,7 @@ pub async fn get_css_value<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(value))
 }
 
-/// GET /session/{session_id}/element/{element_id}/rect - Get element rect
+/// GET `/session/{session_id}/element/{element_id}/rect` - Get element rect
 pub async fn get_rect<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -551,7 +549,7 @@ pub async fn get_rect<R: Runtime + 'static>(
     })))
 }
 
-/// GET /session/{session_id}/element/{element_id}/computedrole - Get computed ARIA role
+/// GET `/session/{session_id}/element/{element_id}/computedrole` - Get computed ARIA role
 pub async fn get_computed_role<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -575,7 +573,7 @@ pub async fn get_computed_role<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(role))
 }
 
-/// GET /session/{session_id}/element/{element_id}/computedlabel - Get computed accessible name
+/// GET `/session/{session_id}/element/{element_id}/computedlabel` - Get computed accessible name
 pub async fn get_computed_label<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -599,7 +597,7 @@ pub async fn get_computed_label<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(label))
 }
 
-/// GET /session/{session_id}/element/{element_id}/screenshot - Take element screenshot
+/// GET `/session/{session_id}/element/{element_id}/screenshot` - Take element screenshot
 pub async fn take_screenshot<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,

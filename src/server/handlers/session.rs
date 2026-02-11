@@ -32,7 +32,7 @@ async fn wait_for_window<R: Runtime>(
     }
 }
 
-/// W3C WebDriver session request (capabilities are accepted but not processed)
+/// W3C `WebDriver` session request (capabilities are accepted but not processed)
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionRequest {
     #[allow(dead_code)] // Accepted for protocol compliance but not processed
@@ -46,7 +46,7 @@ pub struct SessionResponse {
     pub capabilities: Value,
 }
 
-/// POST /session - Create a new session
+/// POST `/session` - Create a new session
 pub async fn create<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Json(_request): Json<CreateSessionRequest>,
@@ -78,7 +78,7 @@ pub async fn create<R: Runtime>(
     Ok(WebDriverResponse::success(response))
 }
 
-/// DELETE /session/{session_id} - Delete a session
+/// DELETE `/session/{session_id}` - Delete a session
 pub async fn delete<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

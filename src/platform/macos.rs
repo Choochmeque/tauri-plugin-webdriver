@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -17,7 +18,7 @@ use crate::platform::{
 };
 use crate::server::response::WebDriverErrorResponse;
 
-/// macOS WebView executor using WKWebView native APIs
+/// macOS `WebView` executor using `WKWebView` native APIs
 #[derive(Clone)]
 pub struct MacOSExecutor<R: Runtime> {
     window: WebviewWindow<R>,
@@ -87,7 +88,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn navigate(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"window.location.href = '{}'; null;"#,
+            r"window.location.href = '{}'; null;",
             url.replace('\\', "\\\\").replace('\'', "\\'")
         );
         self.evaluate_js(&script).await?;
@@ -140,15 +141,14 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         js_var: &str,
     ) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = {};
+            r"(function() {{
+                var el = {strategy_js};
                 if (el) {{
-                    window.{} = el;
+                    window.{js_var} = el;
                     return true;
                 }}
                 return false;
-            }})()"#,
-            strategy_js, js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -160,22 +160,21 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         js_var_prefix: &str,
     ) -> Result<usize, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var elements = {};
+            r"(function() {{
+                var elements = {strategy_js};
                 var count = elements.length;
                 for (var i = 0; i < count; i++) {{
-                    window['{}' + i] = elements[i];
+                    window['{js_var_prefix}' + i] = elements[i];
                 }}
                 return count;
-            }})()"#,
-            strategy_js, js_var_prefix
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
-                if let Some(count) = result.get("value").and_then(|v| v.as_u64()) {
-                    return Ok(count as usize);
+                if let Some(count) = result.get("value").and_then(Value::as_u64) {
+                    return Ok(usize::try_from(count).unwrap_or(0));
                 }
             }
         }
@@ -190,19 +189,18 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<bool, WebDriverErrorResponse> {
         // strategy_js is a complete expression like `parent.querySelector('...')` that expects `parent` to be defined
         let script = format!(
-            r#"(function() {{
-                var parent = window.{};
+            r"(function() {{
+                var parent = window.{parent_js_var};
                 if (!parent || !document.contains(parent)) {{
                     throw new Error('stale element reference');
                 }}
-                var el = {};
+                var el = {strategy_js};
                 if (el) {{
-                    window.{} = el;
+                    window.{js_var} = el;
                     return true;
                 }}
                 return false;
-            }})()"#,
-            parent_js_var, strategy_js, js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -216,26 +214,25 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<usize, WebDriverErrorResponse> {
         // strategy_js is a complete expression like `Array.from(parent.querySelectorAll('...'))` that expects `parent` to be defined
         let script = format!(
-            r#"(function() {{
-                var parent = window.{};
+            r"(function() {{
+                var parent = window.{parent_js_var};
                 if (!parent || !document.contains(parent)) {{
                     throw new Error('stale element reference');
                 }}
-                var elements = {};
+                var elements = {strategy_js};
                 var count = elements.length;
                 for (var i = 0; i < count; i++) {{
-                    window['{}' + i] = elements[i];
+                    window['{js_var_prefix}' + i] = elements[i];
                 }}
                 return count;
-            }})()"#,
-            parent_js_var, strategy_js, js_var_prefix
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
-                if let Some(count) = result.get("value").and_then(|v| v.as_u64()) {
-                    return Ok(count as usize);
+                if let Some(count) = result.get("value").and_then(Value::as_u64) {
+                    return Ok(usize::try_from(count).unwrap_or(0));
                 }
             }
         }
@@ -244,14 +241,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn get_element_text(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 return el.textContent || '';
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -259,14 +255,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 return el.tagName.toLowerCase();
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -279,14 +274,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<Option<String>, WebDriverErrorResponse> {
         let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
-                return el.getAttribute('{}');
-            }})()"#,
-            js_var, escaped_name
+                return el.getAttribute('{escaped_name}');
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
@@ -308,21 +302,20 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<Value, WebDriverErrorResponse> {
         let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
-                return el['{}'];
-            }})()"#,
-            js_var, escaped_name
+                return el['{escaped_name}'];
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
                 return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
                 return Err(WebDriverErrorResponse::javascript_error(error));
             }
         }
@@ -336,14 +329,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<String, WebDriverErrorResponse> {
         let escaped_prop = property.replace('\\', "\\\\").replace('\'', "\\'");
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
-                return window.getComputedStyle(el).getPropertyValue('{}');
-            }})()"#,
-            js_var, escaped_prop
+                return window.getComputedStyle(el).getPropertyValue('{escaped_prop}');
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -351,8 +343,8 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn get_element_rect(&self, js_var: &str) -> Result<ElementRect, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
@@ -363,17 +355,16 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     width: rect.width,
                     height: rect.height
                 }};
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
         if let Some(value) = result.get("value") {
             return Ok(ElementRect {
-                x: value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                y: value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                width: value.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                height: value.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                x: value.get("x").and_then(Value::as_f64).unwrap_or(0.0),
+                y: value.get("y").and_then(Value::as_f64).unwrap_or(0.0),
+                width: value.get("width").and_then(Value::as_f64).unwrap_or(0.0),
+                height: value.get("height").and_then(Value::as_f64).unwrap_or(0.0),
             });
         }
         Ok(ElementRect::default())
@@ -381,15 +372,14 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn is_element_displayed(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 var style = window.getComputedStyle(el);
                 return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -397,14 +387,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn is_element_enabled(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 return !el.disabled;
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -412,8 +401,8 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn is_element_selected(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
@@ -424,8 +413,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     return el.selected;
                 }}
                 return false;
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -433,16 +421,15 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 el.scrollIntoView({{ block: 'center', inline: 'center' }});
                 el.click();
                 return true;
-            }})()"#,
-            js_var
+            }})()"
         );
         self.evaluate_js(&script).await?;
         Ok(())
@@ -450,8 +437,8 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn clear_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
@@ -474,8 +461,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     el.innerHTML = '';
                 }}
                 return true;
-            }})()"#,
-            js_var
+            }})()"
         );
         self.evaluate_js(&script).await?;
         Ok(())
@@ -491,8 +477,8 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             .replace('`', "\\`")
             .replace('$', "\\$");
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
@@ -504,25 +490,24 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                         'value'
                     ).set;
 
-                    var newValue = el.value + `{}`;
+                    var newValue = el.value + `{escaped}`;
                     nativeInputValueSetter.call(el, newValue);
 
                     var inputEvent = new InputEvent('input', {{
                         bubbles: true,
                         cancelable: true,
                         inputType: 'insertText',
-                        data: `{}`
+                        data: `{escaped}`
                     }});
                     el.dispatchEvent(inputEvent);
 
                     var changeEvent = new Event('change', {{ bubbles: true }});
                     el.dispatchEvent(changeEvent);
                 }} else if (el.isContentEditable) {{
-                    document.execCommand('insertText', false, `{}`);
+                    document.execCommand('insertText', false, `{escaped}`);
                 }}
                 return true;
-            }})()"#,
-            js_var, escaped, escaped, escaped
+            }})()"
         );
         self.evaluate_js(&script).await?;
         Ok(())
@@ -530,15 +515,14 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
     async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
+            r"(function() {{
                 var el = document.activeElement;
                 if (el && el !== document.body) {{
-                    window.{} = el;
+                    window.{js_var} = el;
                     return true;
                 }}
                 return false;
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -549,14 +533,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         js_var: &str,
     ) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 return el.computedRole || el.getAttribute('role') || '';
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -567,14 +550,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         js_var: &str,
     ) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 return el.computedName || el.getAttribute('aria-label') || el.innerText || '';
-            }})()"#,
-            js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -590,19 +572,18 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         shadow_var: &str,
     ) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
                 var shadow = el.shadowRoot;
                 if (shadow) {{
-                    window.{} = shadow;
+                    window.{shadow_var} = shadow;
                     return true;
                 }}
                 return false;
-            }})()"#,
-            js_var, shadow_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -616,19 +597,18 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<bool, WebDriverErrorResponse> {
         // strategy_js is a complete expression like `shadow.querySelector('...')` that expects `shadow` to be defined
         let script = format!(
-            r#"(function() {{
-                var shadow = window.{};
+            r"(function() {{
+                var shadow = window.{shadow_var};
                 if (!shadow) {{
                     throw new Error('no such shadow root');
                 }}
-                var el = {};
+                var el = {strategy_js};
                 if (el) {{
-                    window.{} = el;
+                    window.{js_var} = el;
                     return true;
                 }}
                 return false;
-            }})()"#,
-            shadow_var, strategy_js, js_var
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
         extract_bool_value(&result)
@@ -642,26 +622,25 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<usize, WebDriverErrorResponse> {
         // strategy_js is a complete expression like `Array.from(shadow.querySelectorAll('...'))` that expects `shadow` to be defined
         let script = format!(
-            r#"(function() {{
-                var shadow = window.{};
+            r"(function() {{
+                var shadow = window.{shadow_var};
                 if (!shadow) {{
                     throw new Error('no such shadow root');
                 }}
-                var elements = {};
+                var elements = {strategy_js};
                 var count = elements.length;
                 for (var i = 0; i < count; i++) {{
-                    window['{}' + i] = elements[i];
+                    window['{js_var_prefix}' + i] = elements[i];
                 }}
                 return count;
-            }})()"#,
-            shadow_var, strategy_js, js_var_prefix
+            }})()"
         );
         let result = self.evaluate_js(&script).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
-                if let Some(count) = result.get("value").and_then(|v| v.as_u64()) {
-                    return Ok(count as usize);
+                if let Some(count) = result.get("value").and_then(Value::as_u64) {
+                    return Ok(usize::try_from(count).unwrap_or(0));
                 }
             }
         }
@@ -681,19 +660,18 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
         let wrapper = format!(
-            r#"(function() {{
-                var args = {};
-                var fn = function() {{ {} }};
+            r"(function() {{
+                var args = {args_json};
+                var fn = function() {{ {script} }};
                 return fn.apply(null, args);
-            }})()"#,
-            args_json, script
+            }})()"
         );
         let result = self.evaluate_js(&wrapper).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
                 return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
                 return Err(WebDriverErrorResponse::javascript_error(error));
             }
         }
@@ -711,25 +689,24 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
         let wrapper = format!(
-            r#"new Promise(function(resolve, reject) {{
+            r"new Promise(function(resolve, reject) {{
                 try {{
-                    var args = {};
+                    var args = {args_json};
                     args.push(function(result) {{ resolve(result); }});
-                    var fn = function() {{ {} }};
+                    var fn = function() {{ {script} }};
                     fn.apply(null, args);
                 }} catch (e) {{
                     reject(e);
                 }}
-            }})"#,
-            args_json, script
+            }})"
         );
 
         let result = self.evaluate_js(&wrapper).await?;
 
-        if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if let Some(success) = result.get("success").and_then(Value::as_bool) {
             if success {
                 return Ok(result.get("value").cloned().unwrap_or(Value::Null));
-            } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+            } else if let Some(error) = result.get("error").and_then(Value::as_str) {
                 return Err(WebDriverErrorResponse::javascript_error(error));
             }
         }
@@ -789,8 +766,8 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     ) -> Result<String, WebDriverErrorResponse> {
         // For element screenshots, we use JavaScript canvas approach
         let script = format!(
-            r#"(function() {{
-                var el = window.{};
+            r"(function() {{
+                var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
@@ -806,8 +783,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     width: rect.width,
                     height: rect.height
                 }};
-            }})()"#,
-            js_var
+            }})()"
         );
         self.evaluate_js(&script).await?;
 
@@ -899,10 +875,11 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             "\u{E03D}" => ("Meta", "MetaLeft", 91),
             _ => {
                 let ch = key.chars().next().unwrap_or(' ');
+                let upper = ch.to_ascii_uppercase();
                 let code = if ch.is_ascii_alphabetic() {
-                    format!("Key{}", ch.to_ascii_uppercase())
+                    format!("Key{upper}")
                 } else if ch.is_ascii_digit() {
-                    format!("Digit{}", ch)
+                    format!("Digit{ch}")
                 } else {
                     key.to_string()
                 };
@@ -912,20 +889,19 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
 
         let event_type = if is_down { "keydown" } else { "keyup" };
         let script = format!(
-            r#"(function() {{
-                var event = new KeyboardEvent('{}', {{
-                    key: '{}',
-                    code: '{}',
-                    keyCode: {},
-                    which: {},
+            r"(function() {{
+                var event = new KeyboardEvent('{event_type}', {{
+                    key: '{js_key}',
+                    code: '{js_code}',
+                    keyCode: {key_code},
+                    which: {key_code},
                     bubbles: true,
                     cancelable: true
                 }});
                 var activeEl = document.activeElement || document.body;
                 activeEl.dispatchEvent(event);
                 return true;
-            }})()"#,
-            event_type, js_key, js_code, key_code, key_code
+            }})()"
         );
 
         self.evaluate_js(&script).await?;
@@ -945,33 +921,27 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             PointerEventType::Move => "mousemove",
         };
 
+        let buttons = if matches!(event_type, PointerEventType::Down) {
+            1 << button
+        } else {
+            0
+        };
         let script = format!(
-            r#"(function() {{
-                var el = document.elementFromPoint({}, {});
+            r"(function() {{
+                var el = document.elementFromPoint({x}, {y});
                 if (!el) el = document.body;
 
-                var event = new MouseEvent('{}', {{
+                var event = new MouseEvent('{event_name}', {{
                     bubbles: true,
                     cancelable: true,
-                    clientX: {},
-                    clientY: {},
-                    button: {},
-                    buttons: {}
+                    clientX: {x},
+                    clientY: {y},
+                    button: {button},
+                    buttons: {buttons}
                 }});
                 el.dispatchEvent(event);
                 return true;
-            }})()"#,
-            x,
-            y,
-            event_name,
-            x,
-            y,
-            button,
-            if matches!(event_type, PointerEventType::Down) {
-                1 << button
-            } else {
-                0
-            }
+            }})()"
         );
 
         self.evaluate_js(&script).await?;
@@ -1043,22 +1013,21 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             }
             FrameId::Index(index) => {
                 let script = format!(
-                    r#"(function() {{
+                    r"(function() {{
                         var frames = document.querySelectorAll('iframe, frame');
-                        if ({} >= frames.length) {{
+                        if ({index} >= frames.length) {{
                             throw new Error('no such frame');
                         }}
                         return true;
-                    }})()"#,
-                    index
+                    }})()"
                 );
                 self.evaluate_js(&script).await?;
                 Ok(())
             }
             FrameId::Element(js_var) => {
                 let script = format!(
-                    r#"(function() {{
-                        var el = window.{};
+                    r"(function() {{
+                        var el = window.{js_var};
                         if (!el || !document.contains(el)) {{
                             throw new Error('stale element reference');
                         }}
@@ -1066,8 +1035,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                             throw new Error('element is not a frame');
                         }}
                         return true;
-                    }})()"#,
-                    js_var
+                    }})()"
                 );
                 self.evaluate_js(&script).await?;
                 Ok(())
@@ -1085,7 +1053,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // =========================================================================
 
     async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
-        let script = r#"(function() {
+        let script = r"(function() {
             var cookies = document.cookie.split(';');
             var result = [];
             for (var i = 0; i < cookies.length; i++) {
@@ -1101,7 +1069,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                 }
             }
             return result;
-        })()"#;
+        })()";
 
         let result = self.evaluate_js(script).await?;
 
@@ -1126,10 +1094,10 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         let mut cookie_str = format!("{}={}", cookie.name, cookie.value);
 
         if let Some(path) = &cookie.path {
-            cookie_str.push_str(&format!("; path={}", path));
+            let _ = write!(cookie_str, "; path={path}");
         }
         if let Some(domain) = &cookie.domain {
-            cookie_str.push_str(&format!("; domain={}", domain));
+            let _ = write!(cookie_str, "; domain={domain}");
         }
         if cookie.secure {
             cookie_str.push_str("; secure");
@@ -1138,24 +1106,21 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
             cookie_str.push_str("; httponly");
         }
         if let Some(expiry) = cookie.expiry {
-            // Convert Unix timestamp to date string
-            cookie_str.push_str(&format!("; expires={}", expiry));
+            let _ = write!(cookie_str, "; expires={expiry}");
         }
         if let Some(same_site) = &cookie.same_site {
-            cookie_str.push_str(&format!("; samesite={}", same_site));
+            let _ = write!(cookie_str, "; samesite={same_site}");
         }
 
-        let script = format!(
-            r#"document.cookie = '{}'; true"#,
-            cookie_str.replace('\'', "\\'")
-        );
+        let escaped = cookie_str.replace('\'', "\\'");
+        let script = format!(r"document.cookie = '{escaped}'; true");
         self.evaluate_js(&script).await?;
         Ok(())
     }
 
     async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
-            r#"document.cookie = '{}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; true"#,
+            r"document.cookie = '{}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; true",
             name.replace('\'', "\\'")
         );
         self.evaluate_js(&script).await?;
@@ -1233,20 +1198,19 @@ impl<R: Runtime + 'static> MacOSExecutor<R> {
         let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
 
         let script = format!(
-            r#"(function() {{
-                var event = new KeyboardEvent('{}', {{
-                    key: '{}',
-                    code: '{}',
-                    keyCode: {},
-                    which: {},
+            r"(function() {{
+                var event = new KeyboardEvent('{event_type}', {{
+                    key: '{escaped_key}',
+                    code: '{escaped_code}',
+                    keyCode: {key_code},
+                    which: {key_code},
                     bubbles: true,
                     cancelable: true
                 }});
                 var activeEl = document.activeElement || document.body;
                 activeEl.dispatchEvent(event);
                 return true;
-            }})()"#,
-            event_type, escaped_key, escaped_code, key_code, key_code
+            }})()"
         );
 
         self.evaluate_js(&script).await?;
@@ -1258,7 +1222,7 @@ impl<R: Runtime + 'static> MacOSExecutor<R> {
 // Utility Functions
 // =============================================================================
 
-/// Convert NSImage to PNG and encode as base64
+/// Convert `NSImage` to PNG and encode as base64
 unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
     let tiff_data: Option<objc2::rc::Retained<NSData>> = image.TIFFRepresentation();
     let tiff_data = tiff_data.ok_or("Failed to get TIFF representation")?;
@@ -1275,7 +1239,7 @@ unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
     Ok(BASE64_STANDARD.encode(bytes))
 }
 
-/// Convert an NSObject to a JSON value
+/// Convert an `NSObject` to a JSON value
 unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     use objc2_foundation::NSString as NSStr;
 
@@ -1283,7 +1247,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     let class_name = class.name();
 
     if class_name.contains("String") {
-        let ns_str: &NSStr = &*(obj as *const AnyObject as *const NSStr);
+        let ns_str: &NSStr = &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSStr>();
         return Value::String(ns_str.to_string());
     }
 
@@ -1299,6 +1263,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
         let double_val: f64 = msg_send![obj, doubleValue];
         let int_val: i64 = msg_send![obj, longLongValue];
 
+        #[allow(clippy::cast_precision_loss)]
         if (int_val as f64 - double_val).abs() < f64::EPSILON {
             return Value::Number(serde_json::Number::from(int_val));
         } else if let Some(n) = serde_json::Number::from_f64(double_val) {
@@ -1343,7 +1308,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
                 continue;
             }
 
-            let ns_key: &NSStr = &*(key as *const AnyObject as *const NSStr);
+            let ns_key: &NSStr = &*key.cast_const().cast::<NSStr>();
             let key_str = ns_key.to_string();
 
             let val: *mut AnyObject = msg_send![obj, objectForKey: key];
@@ -1363,7 +1328,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
 
 /// Extract string value from JavaScript result
 fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
-    if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
         if success {
             if let Some(value) = result.get("value") {
                 if let Some(s) = value.as_str() {
@@ -1371,7 +1336,7 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
                 }
                 return Ok(value.to_string());
             }
-        } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
             return Err(WebDriverErrorResponse::javascript_error(error));
         }
     }
@@ -1380,12 +1345,12 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
 
 /// Extract boolean value from JavaScript result
 fn extract_bool_value(result: &Value) -> Result<bool, WebDriverErrorResponse> {
-    if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
         if success {
-            if let Some(value) = result.get("value").and_then(|v| v.as_bool()) {
+            if let Some(value) = result.get("value").and_then(Value::as_bool) {
                 return Ok(value);
             }
-        } else if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
             return Err(WebDriverErrorResponse::javascript_error(error));
         }
     }

@@ -6,7 +6,7 @@ use axum::{
 use serde::Serialize;
 use serde_json::{json, Value};
 
-/// W3C WebDriver success response
+/// W3C `WebDriver` success response
 #[derive(Debug, Serialize)]
 pub struct WebDriverResponse {
     pub value: Value,
@@ -35,7 +35,7 @@ impl IntoResponse for WebDriverResponse {
     }
 }
 
-/// W3C WebDriver error response
+/// W3C `WebDriver` error response
 #[derive(Debug)]
 pub struct WebDriverErrorResponse {
     pub status: StatusCode,
@@ -58,7 +58,7 @@ impl WebDriverErrorResponse {
         Self::new(
             StatusCode::NOT_FOUND,
             "invalid session id",
-            &format!("Session {} not found", session_id),
+            &format!("Session {session_id} not found"),
         )
     }
 
@@ -130,5 +130,5 @@ impl IntoResponse for WebDriverErrorResponse {
     }
 }
 
-/// Result type for WebDriver handlers
+/// Result type for `WebDriver` handlers
 pub type WebDriverResult = Result<WebDriverResponse, WebDriverErrorResponse>;

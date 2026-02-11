@@ -22,7 +22,7 @@ pub mod shadow;
 pub mod timeouts;
 pub mod window;
 
-/// GET /status - WebDriver server status
+/// GET `/status` - `WebDriver` server status
 pub async fn status<R: Runtime>(_state: State<Arc<AppState<R>>>) -> WebDriverResult {
     Ok(WebDriverResponse::success(json!({
         "ready": true,

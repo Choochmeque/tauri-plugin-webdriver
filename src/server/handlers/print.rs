@@ -53,7 +53,7 @@ impl From<PrintRequest> for PrintOptions {
     }
 }
 
-/// POST /session/{session_id}/print - Print page to PDF
+/// POST `/session/{session_id}/print` - Print page to PDF
 pub async fn print<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

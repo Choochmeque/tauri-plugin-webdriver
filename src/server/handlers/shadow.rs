@@ -10,7 +10,7 @@ use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriv
 use crate::server::AppState;
 use crate::webdriver::locator::LocatorStrategy;
 
-/// GET /session/{session_id}/element/{element_id}/shadow - Get shadow root
+/// GET `/session/{session_id}/element/{element_id}/shadow` - Get shadow root
 pub async fn get_shadow_root<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, element_id)): Path<(String, String)>,
@@ -47,7 +47,7 @@ pub async fn get_shadow_root<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/shadow/{shadow_id}/element - Find element in shadow root
+/// POST `/session/{session_id}/shadow/{shadow_id}/element` - Find element in shadow root
 pub async fn find_element_in_shadow<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, shadow_id)): Path<(String, String)>,
@@ -95,7 +95,7 @@ pub async fn find_element_in_shadow<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/shadow/{shadow_id}/elements - Find elements in shadow root
+/// POST `/session/{session_id}/shadow/{shadow_id}/elements` - Find elements in shadow root
 pub async fn find_elements_in_shadow<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path((session_id, shadow_id)): Path<(String, String)>,
@@ -144,8 +144,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
 
         // Copy from temp storage to element's js_ref
         let copy_script = format!(
-            "(function() {{ window.{} = window['{}{}'];  return true; }})()",
-            js_var, temp_prefix, i
+            "(function() {{ window.{js_var} = window['{temp_prefix}{i}'];  return true; }})()"
         );
         let _ = executor.evaluate_js(&copy_script).await;
 

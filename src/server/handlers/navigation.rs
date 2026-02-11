@@ -13,7 +13,7 @@ pub struct NavigateRequest {
     pub url: String,
 }
 
-/// POST /session/{session_id}/url - Navigate to URL
+/// POST `/session/{session_id}/url` - Navigate to URL
 pub async fn navigate<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -32,7 +32,7 @@ pub async fn navigate<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// GET /session/{session_id}/url - Get current URL
+/// GET `/session/{session_id}/url` - Get current URL
 pub async fn get_url<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -49,7 +49,7 @@ pub async fn get_url<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(url))
 }
 
-/// GET /session/{session_id}/title - Get page title
+/// GET `/session/{session_id}/title` - Get page title
 pub async fn get_title<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -66,7 +66,7 @@ pub async fn get_title<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(title))
 }
 
-/// POST /session/{session_id}/back - Navigate back
+/// POST `/session/{session_id}/back` - Navigate back
 pub async fn back<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -83,7 +83,7 @@ pub async fn back<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/forward - Navigate forward
+/// POST `/session/{session_id}/forward` - Navigate forward
 pub async fn forward<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -100,7 +100,7 @@ pub async fn forward<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/refresh - Refresh page
+/// POST `/session/{session_id}/refresh` - Refresh page
 pub async fn refresh<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

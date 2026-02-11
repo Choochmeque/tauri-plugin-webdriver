@@ -6,7 +6,7 @@ use tauri::Runtime;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
-/// GET /session/{session_id}/screenshot - Take screenshot
+/// GET `/session/{session_id}/screenshot` - Take screenshot
 pub async fn take<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

@@ -13,7 +13,7 @@ use crate::platform::{create_executor, PlatformExecutor};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::SessionManager;
 
-/// Shared state for the WebDriver server
+/// Shared state for the `WebDriver` server
 pub struct AppState<R: Runtime> {
     pub app: AppHandle<R>,
     pub sessions: RwLock<SessionManager>,
@@ -46,7 +46,7 @@ impl<R: Runtime + 'static> AppState<R> {
     }
 }
 
-/// Start the WebDriver HTTP server on the specified port
+/// Start the `WebDriver` HTTP server on the specified port
 pub fn start<R: Runtime + 'static>(app: AppHandle<R>, port: u16) {
     std::thread::spawn(move || {
         let rt = TokioRuntime::new().expect("Failed to create Tokio runtime");

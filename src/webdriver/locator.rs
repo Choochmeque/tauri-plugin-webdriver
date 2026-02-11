@@ -9,7 +9,7 @@ pub enum LocatorStrategy {
 }
 
 impl LocatorStrategy {
-    /// Parse locator strategy from WebDriver string
+    /// Parse locator strategy from `WebDriver` string
     pub fn from_string(s: &str) -> Option<Self> {
         match s {
             "css selector" => Some(Self::CssSelector),
@@ -27,30 +27,27 @@ impl LocatorStrategy {
 
         match self {
             LocatorStrategy::CssSelector => {
-                format!("document.querySelector('{}')", escaped)
+                format!("document.querySelector('{escaped}')")
             }
             LocatorStrategy::TagName => {
-                format!("document.getElementsByTagName('{}')[0] || null", escaped)
+                format!("document.getElementsByTagName('{escaped}')[0] || null")
             }
             LocatorStrategy::XPath => {
                 format!(
-                    r#"(function() {{
-                        var result = document.evaluate('{}', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    r"(function() {{
+                        var result = document.evaluate('{escaped}', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                         return result.singleNodeValue;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(document.querySelectorAll('a')).find(a => a.textContent.trim() === '{}') || null"#,
-                    escaped
+                    r"Array.from(document.querySelectorAll('a')).find(a => a.textContent.trim() === '{escaped}') || null"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('{}')) || null"#,
-                    escaped
+                    r"Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('{escaped}')) || null"
                 )
             }
         }
@@ -62,35 +59,32 @@ impl LocatorStrategy {
 
         match self {
             LocatorStrategy::CssSelector => {
-                format!("Array.from(document.querySelectorAll('{}'))", escaped)
+                format!("Array.from(document.querySelectorAll('{escaped}'))")
             }
             LocatorStrategy::TagName => {
-                format!("Array.from(document.getElementsByTagName('{}'))", escaped)
+                format!("Array.from(document.getElementsByTagName('{escaped}'))")
             }
             LocatorStrategy::XPath => {
                 format!(
-                    r#"(function() {{
+                    r"(function() {{
                         var result = [];
-                        var iter = document.evaluate('{}', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+                        var iter = document.evaluate('{escaped}', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
                         var node;
                         while ((node = iter.iterateNext())) {{
                             result.push(node);
                         }}
                         return result;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.trim() === '{}')"#,
-                    escaped
+                    r"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.trim() === '{escaped}')"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.includes('{}'))"#,
-                    escaped
+                    r"Array.from(document.querySelectorAll('a')).filter(a => a.textContent.includes('{escaped}'))"
                 )
             }
         }
@@ -104,30 +98,27 @@ impl LocatorStrategy {
 
         match self {
             LocatorStrategy::CssSelector => {
-                format!("parent.querySelector('{}')", escaped)
+                format!("parent.querySelector('{escaped}')")
             }
             LocatorStrategy::TagName => {
-                format!("parent.getElementsByTagName('{}')[0] || null", escaped)
+                format!("parent.getElementsByTagName('{escaped}')[0] || null")
             }
             LocatorStrategy::XPath => {
                 format!(
-                    r#"(function() {{
-                        var result = document.evaluate('{}', parent, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    r"(function() {{
+                        var result = document.evaluate('{escaped}', parent, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                         return result.singleNodeValue;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(parent.querySelectorAll('a')).find(a => a.textContent.trim() === '{}') || null"#,
-                    escaped
+                    r"Array.from(parent.querySelectorAll('a')).find(a => a.textContent.trim() === '{escaped}') || null"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(parent.querySelectorAll('a')).find(a => a.textContent.includes('{}')) || null"#,
-                    escaped
+                    r"Array.from(parent.querySelectorAll('a')).find(a => a.textContent.includes('{escaped}')) || null"
                 )
             }
         }
@@ -141,35 +132,32 @@ impl LocatorStrategy {
 
         match self {
             LocatorStrategy::CssSelector => {
-                format!("Array.from(parent.querySelectorAll('{}'))", escaped)
+                format!("Array.from(parent.querySelectorAll('{escaped}'))")
             }
             LocatorStrategy::TagName => {
-                format!("Array.from(parent.getElementsByTagName('{}'))", escaped)
+                format!("Array.from(parent.getElementsByTagName('{escaped}'))")
             }
             LocatorStrategy::XPath => {
                 format!(
-                    r#"(function() {{
+                    r"(function() {{
                         var result = [];
-                        var iter = document.evaluate('{}', parent, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+                        var iter = document.evaluate('{escaped}', parent, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
                         var node;
                         while ((node = iter.iterateNext())) {{
                             result.push(node);
                         }}
                         return result;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(parent.querySelectorAll('a')).filter(a => a.textContent.trim() === '{}')"#,
-                    escaped
+                    r"Array.from(parent.querySelectorAll('a')).filter(a => a.textContent.trim() === '{escaped}')"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(parent.querySelectorAll('a')).filter(a => a.textContent.includes('{}'))"#,
-                    escaped
+                    r"Array.from(parent.querySelectorAll('a')).filter(a => a.textContent.includes('{escaped}'))"
                 )
             }
         }
@@ -182,32 +170,26 @@ impl LocatorStrategy {
         let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
 
         match self {
-            LocatorStrategy::CssSelector => {
-                format!("shadow.querySelector('{}')", escaped)
-            }
-            LocatorStrategy::TagName => {
-                format!("shadow.querySelector('{}')", escaped)
+            LocatorStrategy::CssSelector | LocatorStrategy::TagName => {
+                format!("shadow.querySelector('{escaped}')")
             }
             LocatorStrategy::XPath => {
                 // XPath from shadow root context
                 format!(
-                    r#"(function() {{
-                        var result = document.evaluate('{}', shadow, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    r"(function() {{
+                        var result = document.evaluate('{escaped}', shadow, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                         return result.singleNodeValue;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(shadow.querySelectorAll('a')).find(a => a.textContent.trim() === '{}') || null"#,
-                    escaped
+                    r"Array.from(shadow.querySelectorAll('a')).find(a => a.textContent.trim() === '{escaped}') || null"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(shadow.querySelectorAll('a')).find(a => a.textContent.includes('{}')) || null"#,
-                    escaped
+                    r"Array.from(shadow.querySelectorAll('a')).find(a => a.textContent.includes('{escaped}')) || null"
                 )
             }
         }
@@ -220,36 +202,30 @@ impl LocatorStrategy {
         let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
 
         match self {
-            LocatorStrategy::CssSelector => {
-                format!("Array.from(shadow.querySelectorAll('{}'))", escaped)
-            }
-            LocatorStrategy::TagName => {
-                format!("Array.from(shadow.querySelectorAll('{}'))", escaped)
+            LocatorStrategy::CssSelector | LocatorStrategy::TagName => {
+                format!("Array.from(shadow.querySelectorAll('{escaped}'))")
             }
             LocatorStrategy::XPath => {
                 format!(
-                    r#"(function() {{
+                    r"(function() {{
                         var result = [];
-                        var iter = document.evaluate('{}', shadow, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+                        var iter = document.evaluate('{escaped}', shadow, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
                         var node;
                         while ((node = iter.iterateNext())) {{
                             result.push(node);
                         }}
                         return result;
-                    }})()"#,
-                    escaped
+                    }})()"
                 )
             }
             LocatorStrategy::LinkText => {
                 format!(
-                    r#"Array.from(shadow.querySelectorAll('a')).filter(a => a.textContent.trim() === '{}')"#,
-                    escaped
+                    r"Array.from(shadow.querySelectorAll('a')).filter(a => a.textContent.trim() === '{escaped}')"
                 )
             }
             LocatorStrategy::PartialLinkText => {
                 format!(
-                    r#"Array.from(shadow.querySelectorAll('a')).filter(a => a.textContent.includes('{}'))"#,
-                    escaped
+                    r"Array.from(shadow.querySelectorAll('a')).filter(a => a.textContent.includes('{escaped}'))"
                 )
             }
         }

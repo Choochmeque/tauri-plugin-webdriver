@@ -6,7 +6,7 @@ use tauri::Runtime;
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
-/// GET /session/{session_id}/source - Get page source
+/// GET `/session/{session_id}/source` - Get page source
 pub async fn get_source<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

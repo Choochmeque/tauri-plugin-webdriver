@@ -34,7 +34,7 @@ pub struct WindowRectRequest {
     pub height: Option<u32>,
 }
 
-/// GET /session/{session_id}/window - Get current window handle
+/// GET `/session/{session_id}/window` - Get current window handle
 pub async fn get_window_handle<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -50,7 +50,7 @@ pub async fn get_window_handle<R: Runtime>(
     Ok(WebDriverResponse::success(current_window))
 }
 
-/// GET /session/{session_id}/window/handles - Get all window handles
+/// GET `/session/{session_id}/window/handles` - Get all window handles
 pub async fn get_window_handles<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -67,7 +67,7 @@ pub async fn get_window_handles<R: Runtime>(
     Ok(WebDriverResponse::success(handles))
 }
 
-/// DELETE /session/{session_id}/window - Close current window
+/// DELETE `/session/{session_id}/window` - Close current window
 pub async fn close_window<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -94,7 +94,7 @@ pub async fn close_window<R: Runtime>(
     }
 }
 
-/// POST /session/{session_id}/window - Switch to window
+/// POST `/session/{session_id}/window` - Switch to window
 pub async fn switch_to_window<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -116,7 +116,7 @@ pub async fn switch_to_window<R: Runtime>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/window/new - Create new window
+/// POST `/session/{session_id}/window/new` - Create new window
 pub async fn new_window<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -135,7 +135,7 @@ pub async fn new_window<R: Runtime + 'static>(
     ))
 }
 
-/// GET /session/{session_id}/window/rect - Get window rect
+/// GET `/session/{session_id}/window/rect` - Get window rect
 pub async fn get_rect<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -158,7 +158,7 @@ pub async fn get_rect<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/window/rect - Set window rect
+/// POST `/session/{session_id}/window/rect` - Set window rect
 pub async fn set_rect<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -193,7 +193,7 @@ pub async fn set_rect<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/window/maximize - Maximize window
+/// POST `/session/{session_id}/window/maximize` - Maximize window
 pub async fn maximize<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -216,7 +216,7 @@ pub async fn maximize<R: Runtime + 'static>(
     })))
 }
 
-/// POST /session/{session_id}/window/minimize - Minimize window
+/// POST `/session/{session_id}/window/minimize` - Minimize window
 pub async fn minimize<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -235,7 +235,7 @@ pub async fn minimize<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/window/fullscreen - Fullscreen window
+/// POST `/session/{session_id}/window/fullscreen` - Fullscreen window
 pub async fn fullscreen<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

@@ -13,7 +13,7 @@ pub struct SendAlertTextRequest {
     pub text: String,
 }
 
-/// POST /session/{session_id}/alert/dismiss - Dismiss alert
+/// POST `/session/{session_id}/alert/dismiss` - Dismiss alert
 pub async fn dismiss<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -31,7 +31,7 @@ pub async fn dismiss<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/alert/accept - Accept alert
+/// POST `/session/{session_id}/alert/accept` - Accept alert
 pub async fn accept<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -49,7 +49,7 @@ pub async fn accept<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// GET /session/{session_id}/alert/text - Get alert text
+/// GET `/session/{session_id}/alert/text` - Get alert text
 pub async fn get_text<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -67,7 +67,7 @@ pub async fn get_text<R: Runtime + 'static>(
     Ok(WebDriverResponse::success(text))
 }
 
-/// POST /session/{session_id}/alert/text - Send text to alert (for prompts)
+/// POST `/session/{session_id}/alert/text` - Send text to alert (for prompts)
 pub async fn send_text<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

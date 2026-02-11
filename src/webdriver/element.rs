@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-/// Represents a WebDriver element reference
+/// Represents a `WebDriver` element reference
 #[derive(Debug, Clone)]
 pub struct ElementRef {
-    /// WebDriver element ID (returned to client)
+    /// `WebDriver` element ID (returned to client)
     pub id: String,
     /// JavaScript variable name holding the element reference
     pub js_ref: String,
@@ -42,7 +42,7 @@ impl ElementStore {
         elem_ref
     }
 
-    /// Get element by WebDriver ID
+    /// Get element by `WebDriver` ID
     pub fn get(&self, id: &str) -> Option<&ElementRef> {
         self.elements.get(id)
     }

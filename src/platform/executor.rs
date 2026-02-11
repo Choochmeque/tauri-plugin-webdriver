@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::server::response::WebDriverErrorResponse;
 
-/// Platform-agnostic trait for WebView operations.
+/// Platform-agnostic trait for `WebView` operations.
 /// Each platform (macOS, Windows, Linux) implements this trait.
 #[async_trait]
 pub trait PlatformExecutor: Send + Sync {
@@ -134,7 +134,7 @@ pub trait PlatformExecutor: Send + Sync {
         text: &str,
     ) -> Result<(), WebDriverErrorResponse>;
 
-    /// Get the active (focused) element and store in js_var
+    /// Get the active (focused) element and store in `js_var`
     /// Returns true if an active element was found
     async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse>;
 
@@ -154,7 +154,7 @@ pub trait PlatformExecutor: Send + Sync {
     // Shadow DOM
     // =========================================================================
 
-    /// Get element's shadow root and store in shadow_var
+    /// Get element's shadow root and store in `shadow_var`
     /// Returns true if shadow root exists
     async fn get_element_shadow_root(
         &self,
@@ -330,7 +330,7 @@ pub enum FrameId {
     Top,
     /// Frame by index
     Index(u32),
-    /// Frame by element reference (js_var)
+    /// Frame by element reference (`js_var`)
     Element(String),
 }
 

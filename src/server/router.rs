@@ -9,7 +9,8 @@ use tauri::Runtime;
 use super::handlers;
 use super::AppState;
 
-/// Create the WebDriver router with all W3C WebDriver endpoints
+/// Create the `WebDriver` router with all W3C `WebDriver` endpoints
+#[allow(clippy::too_many_lines)]
 pub fn create_router<R: Runtime + 'static>(state: Arc<AppState<R>>) -> Router {
     Router::new()
         // Status

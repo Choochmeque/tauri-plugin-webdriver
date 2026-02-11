@@ -4,8 +4,6 @@ use tauri::{
     AppHandle, Runtime,
 };
 
-use crate::models::*;
-
 #[cfg(target_os = "ios")]
 tauri::ios_plugin_binding!(init_plugin_webdriver);
 
@@ -23,11 +21,3 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 
 /// Access to the webdriver APIs.
 pub struct Webdriver<R: Runtime>(PluginHandle<R>);
-
-impl<R: Runtime> Webdriver<R> {
-    pub fn ping(&self, payload: PingRequest) -> crate::Result<PingResponse> {
-        self.0
-            .run_mobile_plugin("ping", payload)
-            .map_err(Into::into)
-    }
-}

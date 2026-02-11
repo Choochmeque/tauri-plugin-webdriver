@@ -15,7 +15,7 @@ pub struct SwitchFrameRequest {
     pub id: Value,
 }
 
-/// POST /session/{session_id}/frame - Switch to frame
+/// POST `/session/{session_id}/frame` - Switch to frame
 pub async fn switch_to_frame<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -35,7 +35,9 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
                     "Frame index must be a non-negative integer",
                 )
             })?;
-            FrameId::Index(index as u32)
+            let index = u32::try_from(index)
+                .map_err(|_| WebDriverErrorResponse::invalid_argument("Frame index too large"))?;
+            FrameId::Index(index)
         }
         Value::Object(obj) => {
             // W3C element reference format
@@ -73,7 +75,7 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
     Ok(WebDriverResponse::null())
 }
 
-/// POST /session/{session_id}/frame/parent - Switch to parent frame
+/// POST `/session/{session_id}/frame/parent` - Switch to parent frame
 pub async fn switch_to_parent_frame<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,

@@ -7,6 +7,7 @@ use super::element::ElementStore;
 
 /// Session timeouts configuration
 #[derive(Debug, Clone, Serialize)]
+#[allow(clippy::struct_field_names)]
 pub struct Timeouts {
     /// Implicit wait timeout in milliseconds
     pub implicit_ms: u64,
@@ -26,7 +27,7 @@ impl Default for Timeouts {
     }
 }
 
-/// Represents a WebDriver session
+/// Represents a `WebDriver` session
 #[derive(Debug)]
 pub struct Session {
     /// Unique session identifier
@@ -50,7 +51,7 @@ impl Session {
     }
 }
 
-/// Manages WebDriver sessions
+/// Manages `WebDriver` sessions
 #[derive(Debug, Default)]
 pub struct SessionManager {
     sessions: HashMap<String, Session>,
