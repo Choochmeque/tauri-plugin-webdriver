@@ -46,22 +46,6 @@ impl ElementStore {
     pub fn get(&self, id: &str) -> Option<&ElementRef> {
         self.elements.get(id)
     }
-
-    /// Remove an element reference
-    pub fn remove(&mut self, id: &str) -> bool {
-        self.elements.remove(id).is_some()
-    }
-
-    /// Clear all stored elements
-    pub fn clear(&mut self) {
-        self.elements.clear();
-        // Don't reset counter to avoid JS variable name collisions
-    }
-
-    /// Get the number of stored elements
-    pub fn count(&self) -> usize {
-        self.elements.len()
-    }
 }
 
 #[cfg(test)]
@@ -75,7 +59,6 @@ mod tests {
 
         assert!(!elem.id.is_empty());
         assert_eq!(elem.js_ref, "__wd_el_0");
-        assert_eq!(store.count(), 1);
     }
 
     #[test]
@@ -84,23 +67,17 @@ mod tests {
         let elem = store.store();
         let id = elem.id.clone();
 
-        let retrieved = store.get(&id);
-        assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().id, id);
+        let retrieved = store.get(&id).expect("element should exist");
+        assert_eq!(retrieved.id, id);
     }
 
     #[test]
-    fn test_clear_elements() {
+    fn test_js_ref_increments() {
         let mut store = ElementStore::new();
-        store.store();
-        store.store();
+        let elem1 = store.store();
+        let elem2 = store.store();
 
-        assert_eq!(store.count(), 2);
-        store.clear();
-        assert_eq!(store.count(), 0);
-
-        // Counter should not reset
-        let elem = store.store();
-        assert_eq!(elem.js_ref, "__wd_el_2");
+        assert_eq!(elem1.js_ref, "__wd_el_0");
+        assert_eq!(elem2.js_ref, "__wd_el_1");
     }
 }

@@ -18,15 +18,21 @@ pub struct ActionsRequest {
 #[serde(tag = "type")]
 pub enum ActionSequence {
     #[serde(rename = "key")]
-    Key { id: String, actions: Vec<KeyAction> },
+    Key {
+        #[serde(rename = "id")]
+        _id: String,
+        actions: Vec<KeyAction>,
+    },
     #[serde(rename = "pointer")]
     Pointer {
-        id: String,
+        #[serde(rename = "id")]
+        _id: String,
         actions: Vec<PointerAction>,
     },
     #[serde(rename = "none")]
     None {
-        id: String,
+        #[serde(rename = "id")]
+        _id: String,
         actions: Vec<PauseAction>,
     },
 }

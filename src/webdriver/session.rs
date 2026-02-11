@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use serde_json::Value;
 use uuid::Uuid;
 
 use super::element::ElementStore;
@@ -32,8 +31,6 @@ impl Default for Timeouts {
 pub struct Session {
     /// Unique session identifier
     pub id: String,
-    /// Session capabilities
-    pub capabilities: Value,
     /// Session timeouts
     pub timeouts: Timeouts,
     /// Element reference storage
@@ -43,19 +40,13 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(capabilities: Value, initial_window: String) -> Self {
+    pub fn new(initial_window: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
-            capabilities,
             timeouts: Timeouts::default(),
             elements: ElementStore::new(),
             current_window: initial_window,
         }
-    }
-
-    /// Clear all stored element references (e.g., on navigation)
-    pub fn clear_elements(&mut self) {
-        self.elements.clear();
     }
 }
 
@@ -73,11 +64,11 @@ impl SessionManager {
     }
 
     /// Create a new session
-    pub fn create(&mut self, capabilities: Value, initial_window: String) -> &Session {
-        let session = Session::new(capabilities, initial_window);
+    pub fn create(&mut self, initial_window: String) -> &Session {
+        let session = Session::new(initial_window);
         let id = session.id.clone();
         self.sessions.insert(id.clone(), session);
-        self.sessions.get(&id).unwrap()
+        self.sessions.get(&id).expect("session was just inserted")
     }
 
     /// Get a session by ID
@@ -93,10 +84,5 @@ impl SessionManager {
     /// Delete a session
     pub fn delete(&mut self, id: &str) -> bool {
         self.sessions.remove(id).is_some()
-    }
-
-    /// Get the number of active sessions
-    pub fn count(&self) -> usize {
-        self.sessions.len()
     }
 }

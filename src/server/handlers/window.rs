@@ -17,6 +17,7 @@ pub struct SwitchWindowRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct NewWindowRequest {
+    #[allow(dead_code)] // Part of W3C protocol but not used in current implementation
     #[serde(rename = "type", default)]
     pub window_type: Option<String>,
 }

@@ -126,7 +126,7 @@ pub async fn click<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -151,7 +151,7 @@ pub async fn clear<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -177,7 +177,7 @@ pub async fn send_keys<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -204,7 +204,7 @@ pub async fn get_text<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -228,7 +228,7 @@ pub async fn get_tag_name<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -252,7 +252,7 @@ pub async fn get_attribute<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -276,7 +276,7 @@ pub async fn get_property<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -300,7 +300,7 @@ pub async fn is_displayed<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -324,7 +324,7 @@ pub async fn is_enabled<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -377,7 +377,7 @@ pub async fn find_from_element<R: Runtime + 'static>(
     let parent_element = session
         .elements
         .get(&parent_element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
     let parent_js_var = parent_element.js_ref.clone();
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -424,7 +424,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
     let parent_element = session
         .elements
         .get(&parent_element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
     let parent_js_var = parent_element.js_ref.clone();
     let current_window = session.current_window.clone();
     drop(sessions);
@@ -485,7 +485,7 @@ pub async fn is_selected<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -509,7 +509,7 @@ pub async fn get_css_value<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -535,7 +535,7 @@ pub async fn get_rect<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -564,7 +564,7 @@ pub async fn get_computed_role<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -588,7 +588,7 @@ pub async fn get_computed_label<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
@@ -612,7 +612,7 @@ pub async fn take_screenshot<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();

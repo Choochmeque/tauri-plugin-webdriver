@@ -23,7 +23,7 @@ pub async fn get_shadow_root<R: Runtime + 'static>(
     let element = session
         .elements
         .get(&element_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_element)?;
     let element_js_var = element.js_ref.clone();
 
     // Create a new element ref for the shadow root
@@ -62,7 +62,7 @@ pub async fn find_element_in_shadow<R: Runtime + 'static>(
     let shadow_element = session
         .elements
         .get(&shadow_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_shadow_root())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_shadow_root)?;
     let shadow_js_var = shadow_element.js_ref.clone();
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -109,7 +109,7 @@ pub async fn find_elements_in_shadow<R: Runtime + 'static>(
     let shadow_element = session
         .elements
         .get(&shadow_id)
-        .ok_or_else(|| WebDriverErrorResponse::no_such_shadow_root())?;
+        .ok_or_else(WebDriverErrorResponse::no_such_shadow_root)?;
     let shadow_js_var = shadow_element.js_ref.clone();
     let current_window = session.current_window.clone();
     drop(sessions);

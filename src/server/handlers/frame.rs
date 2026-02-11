@@ -48,7 +48,7 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
                 let element = session
                     .elements
                     .get(element_id)
-                    .ok_or_else(|| WebDriverErrorResponse::no_such_element())?;
+                    .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
                 FrameId::Element(element.js_ref.clone())
             } else {

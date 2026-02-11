@@ -56,8 +56,10 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     Ok(ns_object_to_json(obj))
                 };
 
-                if let Some(tx) = tx.lock().unwrap().take() {
-                    let _ = tx.send(response);
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(response);
+                    }
                 }
             });
 
@@ -756,14 +758,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                     Err("No image returned".to_string())
                 } else {
                     let image_ref = &*image;
-                    match image_to_png_base64(image_ref) {
-                        Ok(base64) => Ok(base64),
-                        Err(e) => Err(e),
-                    }
+                    image_to_png_base64(image_ref)
                 };
 
-                if let Some(tx) = tx.lock().unwrap().take() {
-                    let _ = tx.send(response);
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(response);
+                    }
                 }
             });
 
@@ -786,9 +787,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         &self,
         js_var: &str,
     ) -> Result<String, WebDriverErrorResponse> {
-        // Get element rect first
-        let rect = self.get_element_rect(js_var).await?;
-
         // For element screenshots, we use JavaScript canvas approach
         let script = format!(
             r#"(function() {{
@@ -836,14 +834,13 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
                         Err("No image returned".to_string())
                     } else {
                         let image_ref = &*image;
-                        match image_to_png_base64(image_ref) {
-                            Ok(base64) => Ok(base64),
-                            Err(e) => Err(e),
-                        }
+                        image_to_png_base64(image_ref)
                     };
 
-                    if let Some(tx) = tx.lock().unwrap().take() {
-                        let _ = tx.send(response);
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(response);
+                        }
                     }
                 });
 

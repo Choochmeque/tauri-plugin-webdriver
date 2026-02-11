@@ -32,18 +32,11 @@ async fn wait_for_window<R: Runtime>(
     }
 }
 
+/// W3C WebDriver session request (capabilities are accepted but not processed)
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionRequest {
-    pub capabilities: Capabilities,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Capabilities {
-    #[serde(default)]
-    pub always_match: Value,
-    #[serde(default)]
-    pub first_match: Vec<Value>,
+    #[allow(dead_code)] // Accepted for protocol compliance but not processed
+    pub capabilities: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,15 +49,15 @@ pub struct SessionResponse {
 /// POST /session - Create a new session
 pub async fn create<R: Runtime>(
     State(state): State<Arc<AppState<R>>>,
-    Json(request): Json<CreateSessionRequest>,
+    Json(_request): Json<CreateSessionRequest>,
 ) -> WebDriverResult {
     // Wait for a window to become available (up to 10 seconds)
     let initial_window = wait_for_window(&state, 10_000).await?;
 
     let mut sessions = state.sessions.write().await;
 
-    // Create session with capabilities and initial window
-    let session = sessions.create(request.capabilities.always_match.clone(), initial_window);
+    // Create session with initial window
+    let session = sessions.create(initial_window);
 
     let response = SessionResponse {
         session_id: session.id.clone(),

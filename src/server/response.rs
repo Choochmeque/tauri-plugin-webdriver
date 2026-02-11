@@ -70,14 +70,6 @@ impl WebDriverErrorResponse {
         )
     }
 
-    pub fn stale_element_reference() -> Self {
-        Self::new(
-            StatusCode::NOT_FOUND,
-            "stale element reference",
-            "Element is no longer attached to the DOM",
-        )
-    }
-
     pub fn no_such_window() -> Self {
         Self::new(
             StatusCode::NOT_FOUND,
@@ -107,14 +99,6 @@ impl WebDriverErrorResponse {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unsupported operation",
             message,
-        )
-    }
-
-    pub fn no_such_frame() -> Self {
-        Self::new(
-            StatusCode::NOT_FOUND,
-            "no such frame",
-            "No frame could be found",
         )
     }
 
