@@ -1050,7 +1050,7 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
                 return Ok(value.to_string());
             }
         } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
     Ok(String::new())
@@ -1064,7 +1064,7 @@ fn extract_bool_value(result: &Value) -> Result<bool, WebDriverErrorResponse> {
                 return Ok(value);
             }
         } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
     Ok(false)
@@ -1078,7 +1078,7 @@ fn extract_usize_value(result: &Value) -> Result<usize, WebDriverErrorResponse> 
                 return Ok(usize::try_from(count).unwrap_or(0));
             }
         } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
     Ok(0)
@@ -1090,7 +1090,7 @@ fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
         if success {
             return Ok(result.get("value").cloned().unwrap_or(Value::Null));
         } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
     Ok(Value::Null)

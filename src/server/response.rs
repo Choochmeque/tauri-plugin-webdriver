@@ -45,12 +45,12 @@ pub struct WebDriverErrorResponse {
 }
 
 impl WebDriverErrorResponse {
-    pub fn new(status: StatusCode, error: &str, message: &str) -> Self {
+    pub fn new(status: StatusCode, error: &str, message: &str, stacktrace: Option<String>) -> Self {
         Self {
             status,
             error: error.to_string(),
             message: message.to_string(),
-            stacktrace: None,
+            stacktrace,
         }
     }
 
@@ -59,6 +59,7 @@ impl WebDriverErrorResponse {
             StatusCode::NOT_FOUND,
             "invalid session id",
             &format!("Session {session_id} not found"),
+            None,
         )
     }
 
@@ -67,6 +68,7 @@ impl WebDriverErrorResponse {
             StatusCode::NOT_FOUND,
             "no such element",
             "Unable to locate element",
+            None,
         )
     }
 
@@ -75,23 +77,30 @@ impl WebDriverErrorResponse {
             StatusCode::NOT_FOUND,
             "no such window",
             "No window could be found",
+            None,
         )
     }
 
-    pub fn javascript_error(message: &str) -> Self {
+    pub fn javascript_error(message: &str, stacktrace: Option<String>) -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "javascript error",
             message,
+            stacktrace,
         )
     }
 
     pub fn unknown_error(message: &str) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "unknown error", message)
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unknown error",
+            message,
+            None,
+        )
     }
 
     pub fn invalid_argument(message: &str) -> Self {
-        Self::new(StatusCode::BAD_REQUEST, "invalid argument", message)
+        Self::new(StatusCode::BAD_REQUEST, "invalid argument", message, None)
     }
 
     pub fn unsupported_operation(message: &str) -> Self {
@@ -99,6 +108,7 @@ impl WebDriverErrorResponse {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unsupported operation",
             message,
+            None,
         )
     }
 
@@ -107,6 +117,7 @@ impl WebDriverErrorResponse {
             StatusCode::NOT_FOUND,
             "no such shadow root",
             "Element does not have a shadow root",
+            None,
         )
     }
 
@@ -115,6 +126,16 @@ impl WebDriverErrorResponse {
             StatusCode::INTERNAL_SERVER_ERROR,
             "script timeout",
             "Script execution timed out",
+            None,
+        )
+    }
+
+    pub fn no_such_cookie(name: &str) -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such cookie",
+            &format!("Cookie '{name}' not found"),
+            None,
         )
     }
 }

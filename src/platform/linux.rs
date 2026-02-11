@@ -68,7 +68,10 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
         });
 
         if let Err(e) = result {
-            return Err(WebDriverErrorResponse::javascript_error(&e.to_string()));
+            return Err(WebDriverErrorResponse::javascript_error(
+                &e.to_string(),
+                None,
+            ));
         }
 
         let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
@@ -77,8 +80,11 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
                 "success": true,
                 "value": value
             })),
-            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error("Channel closed")),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error(
+                "Channel closed",
+                None,
+            )),
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }
@@ -331,7 +337,7 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
                 return Ok(value.to_string());
             }
         } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error));
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
     Ok(String::new())

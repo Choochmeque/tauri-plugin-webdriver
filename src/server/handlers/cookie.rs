@@ -47,11 +47,7 @@ pub async fn get<R: Runtime + 'static>(
 
     match cookie {
         Some(c) => Ok(WebDriverResponse::success(c)),
-        None => Err(WebDriverErrorResponse::new(
-            axum::http::StatusCode::NOT_FOUND,
-            "no such cookie",
-            &format!("Cookie '{name}' not found"),
-        )),
+        None => Err(WebDriverErrorResponse::no_such_cookie(&name)),
     }
 }
 
