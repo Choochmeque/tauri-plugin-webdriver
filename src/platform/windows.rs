@@ -5,7 +5,8 @@ use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
+    ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2ExecuteScriptCompletedHandler,
     ICoreWebView2ExecuteScriptCompletedHandler_Impl,
 };
 use windows::core::{implement, HSTRING, PCWSTR};
