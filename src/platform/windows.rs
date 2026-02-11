@@ -43,16 +43,17 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
         let result = self.window.with_webview(move |webview| unsafe {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
-            let webview2: ICoreWebView2 = webview.controller().CoreWebView2().unwrap();
-            let script_hstring = HSTRING::from(&script_owned);
+            if let Ok(webview2) = webview.controller().CoreWebView2() {
+                let script_hstring = HSTRING::from(&script_owned);
 
-            let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
-            let handler: ICoreWebView2ExecuteScriptCompletedHandler =
-                ExecuteScriptHandler::new(tx).into();
+                let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+                let handler: ICoreWebView2ExecuteScriptCompletedHandler =
+                    ExecuteScriptHandler::new(tx).into();
 
-            webview2
-                .ExecuteScript(PCWSTR(script_hstring.as_ptr()), &handler)
-                .ok();
+                webview2
+                    .ExecuteScript(PCWSTR(script_hstring.as_ptr()), &handler)
+                    .ok();
+            }
         });
 
         if let Err(e) = result {
@@ -727,24 +728,24 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
 
         let result = self.window.with_webview(move |webview| {
             unsafe {
-                let _webview2: ICoreWebView2 = webview.controller().CoreWebView2().unwrap();
+                if let Ok(_webview2) = webview.controller().CoreWebView2() {
+                    // Create a memory stream for the image
+                    // Note: This requires additional COM setup for IStream
+                    // For now, return a placeholder
 
-                // Create a memory stream for the image
-                // Note: This requires additional COM setup for IStream
-                // For now, return a placeholder
+                    let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+                    let handler = CapturePreviewHandler::new(tx);
 
-                let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
-                let handler = CapturePreviewHandler::new(tx);
+                    // CapturePreview requires an IStream - simplified for now
+                    // webview2.CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream, &handler);
 
-                // CapturePreview requires an IStream - simplified for now
-                // webview2.CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream, &handler);
-
-                // For now, signal completion with empty result
-                if let Ok(mut guard) = handler.tx.lock() {
-                    if let Some(tx) = guard.take() {
-                        let _ = tx.send(Ok(String::new()));
-                    }
-                };
+                    // For now, signal completion with empty result
+                    if let Ok(mut guard) = handler.tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(Ok(String::new()));
+                        }
+                    };
+                }
             }
         });
 
@@ -1185,72 +1186,78 @@ impl<R: Runtime + 'static> WindowsExecutor<R> {
 type ScriptResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<Value, String>>>>>;
 type CaptureResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>;
 
-#[allow(clippy::inline_always, clippy::ref_as_ptr)]
-#[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
-struct ExecuteScriptHandler {
-    tx: ScriptResultSender,
-}
+mod handlers {
+    #![allow(clippy::inline_always, clippy::ref_as_ptr)]
 
-impl ExecuteScriptHandler {
-    fn new(tx: ScriptResultSender) -> Self {
-        Self { tx }
+    use super::*;
+
+    #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
+    pub struct ExecuteScriptHandler {
+        pub tx: ScriptResultSender,
     }
-}
 
-impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Impl {
-    fn Invoke(
-        &self,
-        errorcode: windows::core::HRESULT,
-        resultobjectasjson: &windows::core::PCWSTR,
-    ) -> windows::core::Result<()> {
-        let response = if errorcode.is_err() {
-            Err(format!("Script execution failed: {errorcode:?}"))
-        } else {
-            let json_str = unsafe { resultobjectasjson.to_string().unwrap_or_default() };
-            match serde_json::from_str(&json_str) {
-                Ok(value) => Ok(value),
-                Err(_) => Ok(Value::String(json_str)),
-            }
-        };
-
-        if let Ok(mut guard) = self.tx.lock() {
-            if let Some(tx) = guard.take() {
-                let _ = tx.send(response);
-            }
+    impl ExecuteScriptHandler {
+        pub fn new(tx: ScriptResultSender) -> Self {
+            Self { tx }
         }
-        Ok(())
     }
-}
 
-#[allow(clippy::inline_always, clippy::ref_as_ptr)]
-#[implement(ICoreWebView2CapturePreviewCompletedHandler)]
-struct CapturePreviewHandler {
-    tx: CaptureResultSender,
-}
+    impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Impl {
+        fn Invoke(
+            &self,
+            errorcode: windows::core::HRESULT,
+            resultobjectasjson: &windows::core::PCWSTR,
+        ) -> windows::core::Result<()> {
+            let response = if errorcode.is_err() {
+                Err(format!("Script execution failed: {errorcode:?}"))
+            } else {
+                let json_str = unsafe { resultobjectasjson.to_string().unwrap_or_default() };
+                match serde_json::from_str(&json_str) {
+                    Ok(value) => Ok(value),
+                    Err(_) => Ok(Value::String(json_str)),
+                }
+            };
 
-impl CapturePreviewHandler {
-    fn new(tx: CaptureResultSender) -> Self {
-        Self { tx }
-    }
-}
-
-impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler_Impl {
-    fn Invoke(&self, errorcode: windows::core::HRESULT) -> windows::core::Result<()> {
-        let response = if errorcode.is_err() {
-            Err(format!("Capture preview failed: {errorcode:?}"))
-        } else {
-            // In a full implementation, we'd read the IStream here
-            Ok(String::new())
-        };
-
-        if let Ok(mut guard) = self.tx.lock() {
-            if let Some(tx) = guard.take() {
-                let _ = tx.send(response);
+            if let Ok(mut guard) = self.tx.lock() {
+                if let Some(tx) = guard.take() {
+                    let _ = tx.send(response);
+                }
             }
+            Ok(())
         }
-        Ok(())
+    }
+
+    #[implement(ICoreWebView2CapturePreviewCompletedHandler)]
+    pub struct CapturePreviewHandler {
+        pub tx: CaptureResultSender,
+    }
+
+    impl CapturePreviewHandler {
+        pub fn new(tx: CaptureResultSender) -> Self {
+            Self { tx }
+        }
+    }
+
+    impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler_Impl {
+        fn Invoke(&self, errorcode: windows::core::HRESULT) -> windows::core::Result<()> {
+            let response = if errorcode.is_err() {
+                Err(format!("Capture preview failed: {errorcode:?}"))
+            } else {
+                // In a full implementation, we'd read the IStream here
+                Ok(String::new())
+            };
+
+            if let Ok(mut guard) = self.tx.lock() {
+                if let Some(tx) = guard.take() {
+                    let _ = tx.send(response);
+                }
+            }
+            Ok(())
+        }
     }
 }
+
+use handlers::{CapturePreviewHandler, ExecuteScriptHandler};
 
 // =============================================================================
 // Utility Functions
