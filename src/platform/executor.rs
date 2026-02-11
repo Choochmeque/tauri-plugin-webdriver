@@ -30,19 +30,34 @@ pub trait PlatformExecutor: Send + Sync {
     }
 
     /// Get current URL
-    async fn get_url(&self) -> Result<String, WebDriverErrorResponse>;
+    async fn get_url(&self) -> Result<String, WebDriverErrorResponse> {
+        let result = self.evaluate_js("window.location.href").await?;
+        extract_string_value(&result)
+    }
 
     /// Get page title
-    async fn get_title(&self) -> Result<String, WebDriverErrorResponse>;
+    async fn get_title(&self) -> Result<String, WebDriverErrorResponse> {
+        let result = self.evaluate_js("document.title").await?;
+        extract_string_value(&result)
+    }
 
     /// Navigate back in history
-    async fn go_back(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn go_back(&self) -> Result<(), WebDriverErrorResponse> {
+        self.evaluate_js("window.history.back(); null;").await?;
+        Ok(())
+    }
 
     /// Navigate forward in history
-    async fn go_forward(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn go_forward(&self) -> Result<(), WebDriverErrorResponse> {
+        self.evaluate_js("window.history.forward(); null;").await?;
+        Ok(())
+    }
 
     /// Refresh the current page
-    async fn refresh(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn refresh(&self) -> Result<(), WebDriverErrorResponse> {
+        self.evaluate_js("window.location.reload(); null;").await?;
+        Ok(())
+    }
 
     // =========================================================================
     // Document
@@ -61,7 +76,20 @@ pub trait PlatformExecutor: Send + Sync {
         &self,
         strategy_js: &str,
         js_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse>;
+    ) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = {strategy_js};
+                if (el) {{
+                    window.{js_var} = el;
+                    return true;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Find multiple elements and store count
     /// Returns the number of elements found
@@ -401,4 +429,39 @@ pub struct PrintOptions {
     pub shrink_to_fit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "pageRanges")]
     pub page_ranges: Option<Vec<String>>,
+}
+
+// =============================================================================
+// Helper Functions for Default Implementations
+// =============================================================================
+
+/// Extract string value from JavaScript result
+fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            if let Some(value) = result.get("value") {
+                if let Some(s) = value.as_str() {
+                    return Ok(s.to_string());
+                }
+                return Ok(value.to_string());
+            }
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error));
+        }
+    }
+    Ok(String::new())
+}
+
+/// Extract boolean value from JavaScript result
+fn extract_bool_value(result: &Value) -> Result<bool, WebDriverErrorResponse> {
+    if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            if let Some(value) = result.get("value").and_then(Value::as_bool) {
+                return Ok(value);
+            }
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error));
+        }
+    }
+    Ok(false)
 }

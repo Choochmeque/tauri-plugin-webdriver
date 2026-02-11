@@ -86,35 +86,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     }
 
     // =========================================================================
-    // Navigation
-    // =========================================================================
-
-    async fn get_url(&self) -> Result<String, WebDriverErrorResponse> {
-        let result = self.evaluate_js("window.location.href").await?;
-        extract_string_value(&result)
-    }
-
-    async fn get_title(&self) -> Result<String, WebDriverErrorResponse> {
-        let result = self.evaluate_js("document.title").await?;
-        extract_string_value(&result)
-    }
-
-    async fn go_back(&self) -> Result<(), WebDriverErrorResponse> {
-        self.evaluate_js("window.history.back(); null;").await?;
-        Ok(())
-    }
-
-    async fn go_forward(&self) -> Result<(), WebDriverErrorResponse> {
-        self.evaluate_js("window.history.forward(); null;").await?;
-        Ok(())
-    }
-
-    async fn refresh(&self) -> Result<(), WebDriverErrorResponse> {
-        self.evaluate_js("window.location.reload(); null;").await?;
-        Ok(())
-    }
-
-    // =========================================================================
     // Document
     // =========================================================================
 
@@ -128,25 +99,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // =========================================================================
     // Element Operations
     // =========================================================================
-
-    async fn find_element(
-        &self,
-        strategy_js: &str,
-        js_var: &str,
-    ) -> Result<bool, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = {strategy_js};
-                if (el) {{
-                    window.{js_var} = el;
-                    return true;
-                }}
-                return false;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_bool_value(&result)
-    }
 
     async fn find_elements(
         &self,
