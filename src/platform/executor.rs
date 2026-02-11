@@ -354,7 +354,21 @@ pub trait PlatformExecutor: Send + Sync {
     }
 
     /// Click on element
-    async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse>;
+    async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                el.scrollIntoView({{ block: 'center', inline: 'center' }});
+                el.click();
+                return true;
+            }})()"
+        );
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
 
     /// Clear element content (for inputs/textareas)
     async fn clear_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse>;

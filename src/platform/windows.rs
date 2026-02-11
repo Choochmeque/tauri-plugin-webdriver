@@ -84,22 +84,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn click_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                el.scrollIntoView({{ block: 'center', inline: 'center' }});
-                el.click();
-                return true;
-            }})()"
-        );
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
     async fn clear_element(&self, js_var: &str) -> Result<(), WebDriverErrorResponse> {
         let script = format!(
             r"(function() {{
