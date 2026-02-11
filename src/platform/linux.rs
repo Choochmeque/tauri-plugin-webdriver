@@ -42,17 +42,15 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
             // Use glib main context to spawn the async future
             let ctx = MainContext::default();
             ctx.spawn_local(async move {
-                let result = webview.run_javascript_future(&script_owned).await;
+                let result = webview
+                    .evaluate_javascript_future(&script_owned, None, None)
+                    .await;
                 let response: Result<Value, String> = match result {
-                    Ok(js_result) => {
-                        if let Some(js_value) = js_result.js_value() {
-                            if let Some(json_str) = js_value.to_json(0) {
-                                match serde_json::from_str::<Value>(json_str.as_str()) {
-                                    Ok(value) => Ok(value),
-                                    Err(_) => Ok(Value::String(json_str.to_string())),
-                                }
-                            } else {
-                                Ok(Value::Null)
+                    Ok(js_value) => {
+                        if let Some(json_str) = js_value.to_json(0) {
+                            match serde_json::from_str::<Value>(json_str.as_str()) {
+                                Ok(value) => Ok(value),
+                                Err(_) => Ok(Value::String(json_str.to_string())),
                             }
                         } else {
                             Ok(Value::Null)
