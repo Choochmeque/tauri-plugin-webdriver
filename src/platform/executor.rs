@@ -180,7 +180,19 @@ pub trait PlatformExecutor: Send + Sync {
     }
 
     /// Get element tag name (lowercase)
-    async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse>;
+    async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el.tagName.toLowerCase();
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_string_value(&result)
+    }
 
     /// Get element attribute value
     async fn get_element_attribute(

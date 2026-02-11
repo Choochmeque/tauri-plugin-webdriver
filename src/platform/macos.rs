@@ -100,20 +100,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn get_element_tag_name(&self, js_var: &str) -> Result<String, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                return el.tagName.toLowerCase();
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_string_value(&result)
-    }
-
     async fn get_element_attribute(
         &self,
         js_var: &str,
