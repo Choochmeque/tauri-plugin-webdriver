@@ -9,8 +9,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2ExecuteScriptCompletedHandler,
     ICoreWebView2ExecuteScriptCompletedHandler_Impl,
 };
-use windows::core::{HSTRING, PCWSTR};
 use windows::core::implement;
+use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
 use crate::platform::{
@@ -1150,7 +1150,7 @@ impl<R: Runtime + 'static> WindowsExecutor<R> {
 
     async fn take_js_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
         // JavaScript-based screenshot using canvas
-        let script = r#"(function() {
+        let script = r"(function() {
             return new Promise(function(resolve, reject) {
                 try {
                     // This is a simplified approach - full implementation would use html2canvas
@@ -1171,7 +1171,7 @@ impl<R: Runtime + 'static> WindowsExecutor<R> {
                     reject(e.message);
                 }
             });
-        })()"#;
+        })()";
 
         let result = self.evaluate_js(script).await?;
         extract_string_value(&result)
@@ -1182,13 +1182,17 @@ impl<R: Runtime + 'static> WindowsExecutor<R> {
 // COM Handlers
 // =============================================================================
 
+type ScriptResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<Value, String>>>>>;
+type CaptureResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>;
+
+#[allow(clippy::inline_always, clippy::ref_as_ptr)]
 #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
 struct ExecuteScriptHandler {
-    tx: Arc<std::sync::Mutex<Option<oneshot::Sender<Result<Value, String>>>>>,
+    tx: ScriptResultSender,
 }
 
 impl ExecuteScriptHandler {
-    fn new(tx: Arc<std::sync::Mutex<Option<oneshot::Sender<Result<Value, String>>>>>) -> Self {
+    fn new(tx: ScriptResultSender) -> Self {
         Self { tx }
     }
 }
@@ -1200,7 +1204,7 @@ impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Im
         resultobjectasjson: &windows::core::PCWSTR,
     ) -> windows::core::Result<()> {
         let response = if errorcode.is_err() {
-            Err(format!("Script execution failed: {:?}", errorcode))
+            Err(format!("Script execution failed: {errorcode:?}"))
         } else {
             let json_str = unsafe { resultobjectasjson.to_string().unwrap_or_default() };
             match serde_json::from_str(&json_str) {
@@ -1218,13 +1222,14 @@ impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Im
     }
 }
 
+#[allow(clippy::inline_always, clippy::ref_as_ptr)]
 #[implement(ICoreWebView2CapturePreviewCompletedHandler)]
 struct CapturePreviewHandler {
-    tx: Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
+    tx: CaptureResultSender,
 }
 
 impl CapturePreviewHandler {
-    fn new(tx: Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>) -> Self {
+    fn new(tx: CaptureResultSender) -> Self {
         Self { tx }
     }
 }
@@ -1232,7 +1237,7 @@ impl CapturePreviewHandler {
 impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler_Impl {
     fn Invoke(&self, errorcode: windows::core::HRESULT) -> windows::core::Result<()> {
         let response = if errorcode.is_err() {
-            Err(format!("Capture preview failed: {:?}", errorcode))
+            Err(format!("Capture preview failed: {errorcode:?}"))
         } else {
             // In a full implementation, we'd read the IStream here
             Ok(String::new())
