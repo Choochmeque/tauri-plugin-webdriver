@@ -84,21 +84,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn is_element_displayed(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                var style = window.getComputedStyle(el);
-                return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_bool_value(&result)
-    }
-
     async fn is_element_enabled(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
             r"(function() {{
