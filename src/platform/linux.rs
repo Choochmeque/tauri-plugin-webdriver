@@ -89,15 +89,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
     // Navigation
     // =========================================================================
 
-    async fn navigate(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
-        let script = format!(
-            r"window.location.href = '{}'; null;",
-            url.replace('\\', "\\\\").replace('\'', "\\'")
-        );
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
     async fn get_url(&self) -> Result<String, WebDriverErrorResponse> {
         let result = self.evaluate_js("window.location.href").await?;
         extract_string_value(&result)

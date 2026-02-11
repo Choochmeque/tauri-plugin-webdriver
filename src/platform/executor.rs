@@ -20,7 +20,14 @@ pub trait PlatformExecutor: Send + Sync {
     // =========================================================================
 
     /// Navigate to a URL
-    async fn navigate(&self, url: &str) -> Result<(), WebDriverErrorResponse>;
+    async fn navigate(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
+        let script = format!(
+            r"window.location.href = '{}'; null;",
+            url.replace('\\', "\\\\").replace('\'', "\\'")
+        );
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
 
     /// Get current URL
     async fn get_url(&self) -> Result<String, WebDriverErrorResponse>;
