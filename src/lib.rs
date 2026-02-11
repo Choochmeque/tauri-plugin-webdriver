@@ -9,7 +9,6 @@ mod desktop;
 mod mobile;
 
 mod error;
-#[cfg(target_os = "macos")]
 mod platform;
 mod server;
 mod webdriver;
@@ -31,12 +30,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             app.manage(webdriver);
 
             // Start the WebDriver HTTP server
-            #[cfg(desktop)]
-            {
-                let app_handle = app.app_handle().clone();
-                server::start(app_handle, DEFAULT_PORT);
-                tracing::info!("WebDriver plugin initialized on port {}", DEFAULT_PORT);
-            }
+            let app_handle = app.app_handle().clone();
+            server::start(app_handle, DEFAULT_PORT);
+            tracing::info!("WebDriver plugin initialized on port {}", DEFAULT_PORT);
 
             Ok(())
         })
