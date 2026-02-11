@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-deadlinks
-      - run: cargo doc --no-deps -p tauri-plugin-iap
+      - run: cargo doc --no-deps -p tauri-plugin-webdriver
       - run: cargo deadlinks --no-build
 
   # Check links in markdown files.
