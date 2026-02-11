@@ -256,7 +256,20 @@ pub trait PlatformExecutor: Send + Sync {
         &self,
         js_var: &str,
         property: &str,
-    ) -> Result<String, WebDriverErrorResponse>;
+    ) -> Result<String, WebDriverErrorResponse> {
+        let escaped_prop = property.replace('\\', "\\\\").replace('\'', "\\'");
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return window.getComputedStyle(el).getPropertyValue('{escaped_prop}');
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_string_value(&result)
+    }
 
     /// Get element bounding rectangle
     async fn get_element_rect(&self, js_var: &str) -> Result<ElementRect, WebDriverErrorResponse>;
