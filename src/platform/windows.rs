@@ -50,7 +50,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
             let handler = ExecuteScriptHandler::new(tx);
 
             webview2
-                .ExecuteScript(PCWSTR(script_hstring.as_ptr()), handler)
+                .ExecuteScript(PCWSTR(script_hstring.as_ptr()), &handler)
                 .ok();
         });
 
@@ -703,7 +703,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
 
     async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
         // Use JavaScript canvas-based screenshot for cross-platform compatibility
-        let script = r"(function() {
+        let _script = r"(function() {
             return new Promise(function(resolve, reject) {
                 try {
                     var canvas = document.createElement('canvas');
@@ -726,7 +726,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
 
         let result = self.window.with_webview(move |webview| {
             unsafe {
-                let webview2: ICoreWebView2 = webview.controller().CoreWebView2().unwrap();
+                let _webview2: ICoreWebView2 = webview.controller().CoreWebView2().unwrap();
 
                 // Create a memory stream for the image
                 // Note: This requires additional COM setup for IStream
@@ -743,7 +743,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
                     if let Some(tx) = guard.take() {
                         let _ = tx.send(Ok(String::new()));
                     }
-                }
+                };
             }
         });
 
@@ -1192,7 +1192,7 @@ impl ExecuteScriptHandler {
     }
 }
 
-impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler {
+impl ICoreWebView2ExecuteScriptCompletedHandler_Impl for ExecuteScriptHandler_Impl {
     fn Invoke(
         &self,
         errorcode: windows::core::HRESULT,
@@ -1228,7 +1228,7 @@ impl CapturePreviewHandler {
     }
 }
 
-impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler {
+impl ICoreWebView2CapturePreviewCompletedHandler_Impl for CapturePreviewHandler_Impl {
     fn Invoke(&self, errorcode: windows::core::HRESULT) -> windows::core::Result<()> {
         let response = if errorcode.is_err() {
             Err(format!("Capture preview failed: {:?}", errorcode))
