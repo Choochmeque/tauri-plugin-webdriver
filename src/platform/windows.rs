@@ -84,21 +84,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = document.activeElement;
-                if (el && el !== document.body) {{
-                    window.{js_var} = el;
-                    return true;
-                }}
-                return false;
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-        extract_bool_value(&result)
-    }
-
     async fn get_element_computed_role(
         &self,
         js_var: &str,

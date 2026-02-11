@@ -452,7 +452,20 @@ pub trait PlatformExecutor: Send + Sync {
 
     /// Get the active (focused) element and store in `js_var`
     /// Returns true if an active element was found
-    async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse>;
+    async fn get_active_element(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = document.activeElement;
+                if (el && el !== document.body) {{
+                    window.{js_var} = el;
+                    return true;
+                }}
+                return false;
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_bool_value(&result)
+    }
 
     /// Get element's computed accessibility role
     async fn get_element_computed_role(
