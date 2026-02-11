@@ -84,34 +84,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
     // Element Operations
     // =========================================================================
 
-    async fn get_element_attribute(
-        &self,
-        js_var: &str,
-        name: &str,
-    ) -> Result<Option<String>, WebDriverErrorResponse> {
-        let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                return el.getAttribute('{escaped_name}');
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-
-        if let Some(value) = result.get("value") {
-            if value.is_null() {
-                return Ok(None);
-            }
-            if let Some(s) = value.as_str() {
-                return Ok(Some(s.to_string()));
-            }
-        }
-        Ok(None)
-    }
-
     async fn get_element_property(
         &self,
         js_var: &str,
