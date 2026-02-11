@@ -9,7 +9,7 @@ use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
 use crate::platform::{
-    Cookie, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
+    Cookie, FrameId, PlatformExecutor, PrintOptions, WindowRect,
 };
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -235,46 +235,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
                 }});
                 var activeEl = document.activeElement || document.body;
                 activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
-
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
-    async fn dispatch_pointer_event(
-        &self,
-        event_type: PointerEventType,
-        x: i32,
-        y: i32,
-        button: u32,
-    ) -> Result<(), WebDriverErrorResponse> {
-        let event_name = match event_type {
-            PointerEventType::Down => "mousedown",
-            PointerEventType::Up => "mouseup",
-            PointerEventType::Move => "mousemove",
-        };
-
-        let buttons = if matches!(event_type, PointerEventType::Down) {
-            1 << button
-        } else {
-            0
-        };
-        let script = format!(
-            r"(function() {{
-                var el = document.elementFromPoint({x}, {y});
-                if (!el) el = document.body;
-
-                var event = new MouseEvent('{event_name}', {{
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: {x},
-                    clientY: {y},
-                    button: {button},
-                    buttons: {buttons}
-                }});
-                el.dispatchEvent(event);
                 return true;
             }})()"
         );
