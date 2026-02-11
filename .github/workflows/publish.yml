@@ -1,0 +1,47 @@
+# .github/workflows/publish.yml
+name: Publish (crates.io)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"         # e.g. v1.2.3
+  workflow_dispatch:      # allow manual runs
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-crate:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Toolchain
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Verify Cargo.toml version matches the tag
+      - name: Verify crate version matches tag
+        shell: bash
+        run: |
+          CRATE_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          test "$CRATE_VERSION" = "$TAG_VERSION" || (echo "Tag $TAG_VERSION != Cargo.toml $CRATE_VERSION" && exit 1)
+
+      # Dry run first (good practice)
+      - name: cargo publish (dry run)
+        run: cargo publish --dry-run
+
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
