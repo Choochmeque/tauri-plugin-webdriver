@@ -641,7 +641,25 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
 
         let wrapper = format!(
             r"(function() {{
-                var args = {args_json};
+                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                function deserializeArg(arg) {{
+                    if (arg === null || arg === undefined) return arg;
+                    if (Array.isArray(arg)) return arg.map(deserializeArg);
+                    if (typeof arg === 'object') {{
+                        if (arg[ELEMENT_KEY]) {{
+                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                            if (!el) throw new Error('stale element reference');
+                            return el;
+                        }}
+                        var result = {{}};
+                        for (var key in arg) {{
+                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                        }}
+                        return result;
+                    }}
+                    return arg;
+                }}
+                var args = {args_json}.map(deserializeArg);
                 var fn = function() {{ {script} }};
                 return fn.apply(null, args);
             }})()"
@@ -671,7 +689,25 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
         let wrapper = format!(
             r"new Promise(function(resolve, reject) {{
                 try {{
-                    var args = {args_json};
+                    var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                    function deserializeArg(arg) {{
+                        if (arg === null || arg === undefined) return arg;
+                        if (Array.isArray(arg)) return arg.map(deserializeArg);
+                        if (typeof arg === 'object') {{
+                            if (arg[ELEMENT_KEY]) {{
+                                var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                                if (!el) throw new Error('stale element reference');
+                                return el;
+                            }}
+                            var result = {{}};
+                            for (var key in arg) {{
+                                if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                            }}
+                            return result;
+                        }}
+                        return arg;
+                    }}
+                    var args = {args_json}.map(deserializeArg);
                     args.push(function(result) {{ resolve(result); }});
                     var fn = function() {{ {script} }};
                     fn.apply(null, args);

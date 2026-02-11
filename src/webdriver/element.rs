@@ -15,23 +15,21 @@ pub struct ElementRef {
 #[derive(Debug, Default)]
 pub struct ElementStore {
     elements: HashMap<String, ElementRef>,
-    /// Counter for generating unique JS variable names
-    counter: u64,
 }
 
 impl ElementStore {
     pub fn new() -> Self {
         Self {
             elements: HashMap::new(),
-            counter: 0,
         }
     }
 
     /// Store a new element and return its reference
     pub fn store(&mut self) -> ElementRef {
         let id = Uuid::new_v4().to_string();
-        let js_ref = format!("__wd_el_{}", self.counter);
-        self.counter += 1;
+        // Remove hyphens from UUID for valid JS variable name
+        let id_no_hyphens = id.replace('-', "");
+        let js_ref = format!("__wd_el_{id_no_hyphens}");
 
         let elem_ref = ElementRef {
             id: id.clone(),
@@ -58,7 +56,9 @@ mod tests {
         let elem = store.store();
 
         assert!(!elem.id.is_empty());
-        assert_eq!(elem.js_ref, "__wd_el_0");
+        assert!(elem.js_ref.starts_with("__wd_el_"));
+        // js_ref uses ID without hyphens
+        assert!(elem.js_ref.contains(&elem.id.replace('-', "")));
     }
 
     #[test]
@@ -72,12 +72,19 @@ mod tests {
     }
 
     #[test]
-    fn test_js_ref_increments() {
+    fn test_js_ref_uses_id_without_hyphens() {
         let mut store = ElementStore::new();
         let elem1 = store.store();
         let elem2 = store.store();
 
-        assert_eq!(elem1.js_ref, "__wd_el_0");
-        assert_eq!(elem2.js_ref, "__wd_el_1");
+        // js_ref should use ID with hyphens removed for valid JS variable name
+        assert_eq!(
+            elem1.js_ref,
+            format!("__wd_el_{}", elem1.id.replace('-', ""))
+        );
+        assert_eq!(
+            elem2.js_ref,
+            format!("__wd_el_{}", elem2.id.replace('-', ""))
+        );
     }
 }
