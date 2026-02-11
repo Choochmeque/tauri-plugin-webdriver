@@ -32,7 +32,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             // Start the WebDriver HTTP server
             let app_handle = app.app_handle().clone();
             server::start(app_handle, DEFAULT_PORT);
-            tracing::info!("WebDriver plugin initialized on port {}", DEFAULT_PORT);
+            tracing::info!("WebDriver plugin initialized on port {DEFAULT_PORT}");
 
             Ok(())
         })
