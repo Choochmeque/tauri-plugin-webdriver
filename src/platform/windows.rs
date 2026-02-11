@@ -9,7 +9,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2ExecuteScriptCompletedHandler,
     ICoreWebView2ExecuteScriptCompletedHandler_Impl,
 };
-use windows::core::{implement, HSTRING, PCWSTR};
+use windows::core::{HSTRING, PCWSTR};
+use windows_implement::implement;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
 use crate::platform::{
