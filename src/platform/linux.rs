@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use glib;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webkit2gtk::traits::WebViewExt;
+use webkit2gtk::gio::Cancellable;
+use webkit2gtk::prelude::WebViewExt;
+use webkit2gtk::JavascriptResult;
 
 use crate::platform::{
     Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
@@ -34,36 +37,35 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
         let script_owned = script.to_string();
 
         let result = self.window.with_webview(move |webview| {
-            use webkit2gtk::gio::Cancellable;
-
             let webview = webview.inner();
             let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
-            webview.run_javascript(&script_owned, None::<&Cancellable>, move |result| {
-                let response = match result {
-                    Ok(js_result) => {
-                        if let Some(js_value) = js_result.js_value() {
-                            if let Some(json_str) = js_value.to_json(0) {
-                                match serde_json::from_str::<Value>(&json_str) {
+            webview.run_javascript(
+                &script_owned,
+                None::<&Cancellable>,
+                move |result: Result<JavascriptResult, glib::Error>| {
+                    let response: Result<Value, String> = match result {
+                        Ok(js_result) => {
+                            if let Some(js_value) = js_result.js_value() {
+                                let json_str = js_value.to_json(0);
+                                match serde_json::from_str::<Value>(json_str.as_str()) {
                                     Ok(value) => Ok(value),
                                     Err(_) => Ok(Value::String(json_str.to_string())),
                                 }
                             } else {
                                 Ok(Value::Null)
                             }
-                        } else {
-                            Ok(Value::Null)
+                        }
+                        Err(e) => Err(e.to_string()),
+                    };
+
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(response);
                         }
                     }
-                    Err(e) => Err(e.to_string()),
-                };
-
-                if let Ok(mut guard) = tx.lock() {
-                    if let Some(tx) = guard.take() {
-                        let _ = tx.send(response);
-                    }
-                }
-            });
+                },
+            );
         });
 
         if let Err(e) = result {

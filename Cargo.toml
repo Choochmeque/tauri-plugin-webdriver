@@ -38,6 +38,7 @@ windows-core = "0.61"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"
+glib = "0.20"
 
 [build-dependencies]
 tauri-plugin = { version = "2.5.3", features = ["build"] }
