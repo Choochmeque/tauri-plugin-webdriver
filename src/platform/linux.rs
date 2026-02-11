@@ -8,9 +8,7 @@ use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webkit2gtk::WebViewExt;
 
-use crate::platform::{
-    Cookie, PlatformExecutor, PrintOptions, WindowRect,
-};
+use crate::platform::{PlatformExecutor, PrintOptions, WindowRect};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
 
@@ -265,95 +263,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
         let _ = self.window.set_fullscreen(true);
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         self.get_window_rect().await
-    }
-
-    // =========================================================================
-    // Cookies
-    // =========================================================================
-
-    async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
-        let script = r"(function() {
-            var cookies = document.cookie.split(';');
-            var result = [];
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].trim();
-                if (cookie) {
-                    var eqIndex = cookie.indexOf('=');
-                    if (eqIndex > 0) {
-                        result.push({
-                            name: cookie.substring(0, eqIndex),
-                            value: cookie.substring(eqIndex + 1)
-                        });
-                    }
-                }
-            }
-            return result;
-        })()";
-
-        let result = self.evaluate_js(script).await?;
-
-        if let Some(value) = result.get("value") {
-            if let Some(arr) = value.as_array() {
-                let cookies: Vec<Cookie> = arr
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect();
-                return Ok(cookies);
-            }
-        }
-        Ok(vec![])
-    }
-
-    async fn get_cookie(&self, name: &str) -> Result<Option<Cookie>, WebDriverErrorResponse> {
-        let cookies = self.get_all_cookies().await?;
-        Ok(cookies.into_iter().find(|c| c.name == name))
-    }
-
-    async fn add_cookie(&self, cookie: Cookie) -> Result<(), WebDriverErrorResponse> {
-        use std::fmt::Write;
-
-        let mut cookie_str = format!("{}={}", cookie.name, cookie.value);
-
-        if let Some(path) = &cookie.path {
-            let _ = write!(cookie_str, "; path={path}");
-        }
-        if let Some(domain) = &cookie.domain {
-            let _ = write!(cookie_str, "; domain={domain}");
-        }
-        if cookie.secure {
-            cookie_str.push_str("; secure");
-        }
-        if cookie.http_only {
-            cookie_str.push_str("; httponly");
-        }
-        if let Some(expiry) = cookie.expiry {
-            let _ = write!(cookie_str, "; expires={expiry}");
-        }
-        if let Some(same_site) = &cookie.same_site {
-            let _ = write!(cookie_str, "; samesite={same_site}");
-        }
-
-        let escaped = cookie_str.replace('\'', "\\'");
-        let script = format!(r"document.cookie = '{escaped}'; true");
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
-    async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
-        let script = format!(
-            r"document.cookie = '{}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; true",
-            name.replace('\'', "\\'")
-        );
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
-    async fn delete_all_cookies(&self) -> Result<(), WebDriverErrorResponse> {
-        let cookies = self.get_all_cookies().await?;
-        for cookie in cookies {
-            self.delete_cookie(&cookie.name).await?;
-        }
-        Ok(())
     }
 
     // =========================================================================
