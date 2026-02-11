@@ -272,7 +272,34 @@ pub trait PlatformExecutor: Send + Sync {
     }
 
     /// Get element bounding rectangle
-    async fn get_element_rect(&self, js_var: &str) -> Result<ElementRect, WebDriverErrorResponse>;
+    async fn get_element_rect(&self, js_var: &str) -> Result<ElementRect, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                var rect = el.getBoundingClientRect();
+                return {{
+                    x: rect.x + window.scrollX,
+                    y: rect.y + window.scrollY,
+                    width: rect.width,
+                    height: rect.height
+                }};
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+
+        if let Some(value) = result.get("value") {
+            return Ok(ElementRect {
+                x: value.get("x").and_then(Value::as_f64).unwrap_or(0.0),
+                y: value.get("y").and_then(Value::as_f64).unwrap_or(0.0),
+                width: value.get("width").and_then(Value::as_f64).unwrap_or(0.0),
+                height: value.get("height").and_then(Value::as_f64).unwrap_or(0.0),
+            });
+        }
+        Ok(ElementRect::default())
+    }
 
     /// Check if element is displayed
     async fn is_element_displayed(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse>;

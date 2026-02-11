@@ -14,7 +14,7 @@ use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
 use crate::platform::{
-    Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
+    Cookie, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
 };
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -99,35 +99,6 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     // =========================================================================
     // Element Operations
     // =========================================================================
-
-    async fn get_element_rect(&self, js_var: &str) -> Result<ElementRect, WebDriverErrorResponse> {
-        let script = format!(
-            r"(function() {{
-                var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
-                    throw new Error('stale element reference');
-                }}
-                var rect = el.getBoundingClientRect();
-                return {{
-                    x: rect.x + window.scrollX,
-                    y: rect.y + window.scrollY,
-                    width: rect.width,
-                    height: rect.height
-                }};
-            }})()"
-        );
-        let result = self.evaluate_js(&script).await?;
-
-        if let Some(value) = result.get("value") {
-            return Ok(ElementRect {
-                x: value.get("x").and_then(Value::as_f64).unwrap_or(0.0),
-                y: value.get("y").and_then(Value::as_f64).unwrap_or(0.0),
-                width: value.get("width").and_then(Value::as_f64).unwrap_or(0.0),
-                height: value.get("height").and_then(Value::as_f64).unwrap_or(0.0),
-            });
-        }
-        Ok(ElementRect::default())
-    }
 
     async fn is_element_displayed(&self, js_var: &str) -> Result<bool, WebDriverErrorResponse> {
         let script = format!(
