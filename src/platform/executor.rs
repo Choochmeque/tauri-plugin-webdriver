@@ -815,10 +815,50 @@ pub trait PlatformExecutor: Send + Sync {
     // =========================================================================
 
     /// Switch to a frame by ID (index, element reference, or null for top)
-    async fn switch_to_frame(&self, id: FrameId) -> Result<(), WebDriverErrorResponse>;
+    async fn switch_to_frame(&self, id: FrameId) -> Result<(), WebDriverErrorResponse> {
+        match id {
+            FrameId::Top => {
+                // Switch back to top-level context
+                // TODO: This is a no-op for now as we don't track frame context
+                Ok(())
+            }
+            FrameId::Index(index) => {
+                let script = format!(
+                    r"(function() {{
+                        var frames = document.querySelectorAll('iframe, frame');
+                        if ({index} >= frames.length) {{
+                            throw new Error('no such frame');
+                        }}
+                        return true;
+                    }})()"
+                );
+                self.evaluate_js(&script).await?;
+                Ok(())
+            }
+            FrameId::Element(js_var) => {
+                let script = format!(
+                    r"(function() {{
+                        var el = window.{js_var};
+                        if (!el || !document.contains(el)) {{
+                            throw new Error('stale element reference');
+                        }}
+                        if (el.tagName !== 'IFRAME' && el.tagName !== 'FRAME') {{
+                            throw new Error('element is not a frame');
+                        }}
+                        return true;
+                    }})()"
+                );
+                self.evaluate_js(&script).await?;
+                Ok(())
+            }
+        }
+    }
 
     /// Switch to parent frame
-    async fn switch_to_parent_frame(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn switch_to_parent_frame(&self) -> Result<(), WebDriverErrorResponse> {
+        // TODO: No-op for now - frame context tracking would be needed
+        Ok(())
+    }
 
     // =========================================================================
     // Cookies

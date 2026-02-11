@@ -9,7 +9,7 @@ use tokio::sync::oneshot;
 use webkit2gtk::WebViewExt;
 
 use crate::platform::{
-    Cookie, FrameId, PlatformExecutor, PrintOptions, WindowRect,
+    Cookie, PlatformExecutor, PrintOptions, WindowRect,
 };
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -265,49 +265,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
         let _ = self.window.set_fullscreen(true);
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         self.get_window_rect().await
-    }
-
-    // =========================================================================
-    // Frames
-    // =========================================================================
-
-    async fn switch_to_frame(&self, id: FrameId) -> Result<(), WebDriverErrorResponse> {
-        match id {
-            FrameId::Top => Ok(()),
-            FrameId::Index(index) => {
-                let script = format!(
-                    r"(function() {{
-                        var frames = document.querySelectorAll('iframe, frame');
-                        if ({index} >= frames.length) {{
-                            throw new Error('no such frame');
-                        }}
-                        return true;
-                    }})()"
-                );
-                self.evaluate_js(&script).await?;
-                Ok(())
-            }
-            FrameId::Element(js_var) => {
-                let script = format!(
-                    r"(function() {{
-                        var el = window.{js_var};
-                        if (!el || !document.contains(el)) {{
-                            throw new Error('stale element reference');
-                        }}
-                        if (el.tagName !== 'IFRAME' && el.tagName !== 'FRAME') {{
-                            throw new Error('element is not a frame');
-                        }}
-                        return true;
-                    }})()"
-                );
-                self.evaluate_js(&script).await?;
-                Ok(())
-            }
-        }
-    }
-
-    async fn switch_to_parent_frame(&self) -> Result<(), WebDriverErrorResponse> {
-        Ok(())
     }
 
     // =========================================================================
