@@ -228,6 +228,15 @@ pub trait PlatformExecutor: Send + Sync {
         button: u32,
     ) -> Result<(), WebDriverErrorResponse>;
 
+    /// Dispatch a scroll/wheel event
+    async fn dispatch_scroll_event(
+        &self,
+        x: i32,
+        y: i32,
+        delta_x: i32,
+        delta_y: i32,
+    ) -> Result<(), WebDriverErrorResponse>;
+
     // =========================================================================
     // Window Management
     // =========================================================================

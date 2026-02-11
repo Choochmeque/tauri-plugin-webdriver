@@ -29,6 +29,12 @@ pub enum ActionSequence {
         _id: String,
         actions: Vec<PointerAction>,
     },
+    #[serde(rename = "wheel")]
+    Wheel {
+        #[serde(rename = "id")]
+        _id: String,
+        actions: Vec<WheelAction>,
+    },
     #[serde(rename = "none")]
     None {
         #[serde(rename = "id")]
@@ -67,6 +73,24 @@ pub enum PointerAction {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
+pub enum WheelAction {
+    #[serde(rename = "scroll")]
+    Scroll {
+        x: i32,
+        y: i32,
+        #[serde(rename = "deltaX")]
+        delta_x: i32,
+        #[serde(rename = "deltaY")]
+        delta_y: i32,
+        #[serde(default)]
+        duration: Option<u64>,
+    },
+    #[serde(rename = "pause")]
+    Pause { duration: Option<u64> },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
 pub enum PauseAction {
     #[serde(rename = "pause")]
     Pause { duration: Option<u64> },
@@ -79,6 +103,7 @@ struct PointerState {
 }
 
 /// POST `/session/{session_id}/actions` - Perform actions
+#[allow(clippy::too_many_lines)]
 pub async fn perform<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
@@ -154,6 +179,33 @@ pub async fn perform<R: Runtime + 'static>(
                                 .await?;
                         }
                         PointerAction::Pause { duration } => {
+                            if let Some(ms) = duration {
+                                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
+                            }
+                        }
+                    }
+                }
+            }
+            ActionSequence::Wheel { actions, .. } => {
+                for action in actions {
+                    match action {
+                        WheelAction::Scroll {
+                            x,
+                            y,
+                            delta_x,
+                            delta_y,
+                            duration,
+                        } => {
+                            if let Some(ms) = duration {
+                                if *ms > 0 {
+                                    tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
+                                }
+                            }
+                            executor
+                                .dispatch_scroll_event(*x, *y, *delta_x, *delta_y)
+                                .await?;
+                        }
+                        WheelAction::Pause { duration } => {
                             if let Some(ms) = duration {
                                 tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
                             }

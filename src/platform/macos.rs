@@ -948,6 +948,39 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         Ok(())
     }
 
+    async fn dispatch_scroll_event(
+        &self,
+        x: i32,
+        y: i32,
+        delta_x: i32,
+        delta_y: i32,
+    ) -> Result<(), WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = document.elementFromPoint({x}, {y});
+                if (!el) el = document.body;
+
+                var event = new WheelEvent('wheel', {{
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: {x},
+                    clientY: {y},
+                    deltaX: {delta_x},
+                    deltaY: {delta_y},
+                    deltaMode: 0
+                }});
+                el.dispatchEvent(event);
+
+                // Also perform actual scroll
+                window.scrollBy({delta_x}, {delta_y});
+                return true;
+            }})()"
+        );
+
+        self.evaluate_js(&script).await?;
+        Ok(())
+    }
+
     // =========================================================================
     // Window Management
     // =========================================================================
