@@ -471,7 +471,19 @@ pub trait PlatformExecutor: Send + Sync {
     async fn get_element_computed_role(
         &self,
         js_var: &str,
-    ) -> Result<String, WebDriverErrorResponse>;
+    ) -> Result<String, WebDriverErrorResponse> {
+        let script = format!(
+            r"(function() {{
+                var el = window.{js_var};
+                if (!el || !document.contains(el)) {{
+                    throw new Error('stale element reference');
+                }}
+                return el.computedRole || el.getAttribute('role') || '';
+            }})()"
+        );
+        let result = self.evaluate_js(&script).await?;
+        extract_string_value(&result)
+    }
 
     /// Get element's computed accessibility label
     async fn get_element_computed_label(
