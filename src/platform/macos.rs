@@ -1077,7 +1077,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
         match id {
             FrameId::Top => {
                 // Switch back to top-level context
-                // This is a no-op for now as we don't track frame context
+                // TODO: This is a no-op for now as we don't track frame context
                 Ok(())
             }
             FrameId::Index(index) => {
@@ -1113,7 +1113,7 @@ impl<R: Runtime + 'static> PlatformExecutor for MacOSExecutor<R> {
     }
 
     async fn switch_to_parent_frame(&self) -> Result<(), WebDriverErrorResponse> {
-        // No-op for now - frame context tracking would be needed
+        // TODO: No-op for now - frame context tracking would be needed
         Ok(())
     }
 

@@ -240,6 +240,6 @@ pub async fn release<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
 
-    // Release all pressed keys/buttons (no-op for now)
+    // TODO: Release all pressed keys/buttons (no-op for now)
     Ok(WebDriverResponse::null())
 }

@@ -745,7 +745,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
                     canvas.height = document.documentElement.scrollHeight;
 
                     // For simple pages, we can use html2canvas-like approach
-                    // For now, return a placeholder - native WebView2 CapturePreview would be better
+                    // TODO: For now, return a placeholder - native WebView2 CapturePreview would be better
                     resolve('');
                 } catch (e) {
                     reject(e.message);
@@ -767,7 +767,7 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
                     let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
                     let handler = CapturePreviewHandler::new(tx);
 
-                    // CapturePreview requires an IStream - simplified for now
+                    // TODO: CapturePreview requires an IStream - simplified for now
                     // webview2.CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream, &handler);
 
                     // For now, signal completion with empty result
