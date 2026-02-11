@@ -47,7 +47,8 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
             let script_hstring = HSTRING::from(&script_owned);
 
             let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
-            let handler = ExecuteScriptHandler::new(tx);
+            let handler: ICoreWebView2ExecuteScriptCompletedHandler =
+                ExecuteScriptHandler::new(tx).into();
 
             webview2
                 .ExecuteScript(PCWSTR(script_hstring.as_ptr()), &handler)
