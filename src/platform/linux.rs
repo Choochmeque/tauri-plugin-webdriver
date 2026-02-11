@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use javascriptcore::auto::value::ValueExt;
 use serde_json::Value;
 use tauri::{Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webkit2gtk::gio::Cancellable;
-use webkit2gtk::{Error as WebKitError, JavascriptResult, WebViewExt};
+use webkit2gtk::prelude::*;
+use webkit2gtk::{Error as WebKitError, JavascriptResult};
 
 use crate::platform::{
     Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
