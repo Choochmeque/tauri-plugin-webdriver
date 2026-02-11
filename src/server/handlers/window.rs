@@ -145,9 +145,10 @@ pub async fn get_rect<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let rect = executor.get_window_rect().await?;
 
     Ok(WebDriverResponse::success(json!({
@@ -169,9 +170,10 @@ pub async fn set_rect<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
 
     // Get current rect to fill in missing values
     let current = executor.get_window_rect().await?;
@@ -203,9 +205,10 @@ pub async fn maximize<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let rect = executor.maximize_window().await?;
 
     Ok(WebDriverResponse::success(json!({
@@ -226,9 +229,10 @@ pub async fn minimize<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.minimize_window().await?;
 
     // Return null per W3C spec (minimized window has no meaningful rect)
@@ -245,9 +249,10 @@ pub async fn fullscreen<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let rect = executor.fullscreen_window().await?;
 
     Ok(WebDriverResponse::success(json!({

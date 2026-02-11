@@ -114,9 +114,10 @@ pub async fn perform<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let mut pointer_state = PointerState { x: 0, y: 0 };
 
     for action_seq in &request.actions {

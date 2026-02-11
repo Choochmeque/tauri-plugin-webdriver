@@ -67,9 +67,10 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
     };
 
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.switch_to_frame(frame_id).await?;
 
     Ok(WebDriverResponse::null())
@@ -85,9 +86,10 @@ pub async fn switch_to_parent_frame<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.switch_to_parent_frame().await?;
 
     Ok(WebDriverResponse::null())

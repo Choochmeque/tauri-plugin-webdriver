@@ -194,7 +194,6 @@ pub trait PlatformExecutor: Send + Sync {
         &self,
         script: &str,
         args: &[Value],
-        timeout_ms: u64,
     ) -> Result<Value, WebDriverErrorResponse>;
 
     // =========================================================================

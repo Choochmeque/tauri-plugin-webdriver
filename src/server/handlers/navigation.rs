@@ -24,9 +24,10 @@ pub async fn navigate<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.navigate(&request.url).await?;
 
     Ok(WebDriverResponse::null())
@@ -42,9 +43,10 @@ pub async fn get_url<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let url = executor.get_url().await?;
     Ok(WebDriverResponse::success(url))
 }
@@ -59,9 +61,10 @@ pub async fn get_title<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let title = executor.get_title().await?;
     Ok(WebDriverResponse::success(title))
 }
@@ -76,9 +79,10 @@ pub async fn back<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.go_back().await?;
     Ok(WebDriverResponse::null())
 }
@@ -93,9 +97,10 @@ pub async fn forward<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.go_forward().await?;
     Ok(WebDriverResponse::null())
 }
@@ -110,9 +115,10 @@ pub async fn refresh<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.refresh().await?;
     Ok(WebDriverResponse::null())
 }

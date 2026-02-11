@@ -14,26 +14,31 @@ mod linux;
 use std::sync::Arc;
 use tauri::{Runtime, WebviewWindow};
 
+use crate::webdriver::Timeouts;
+
 /// Create a platform-specific executor for the given window
 #[cfg(target_os = "macos")]
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
+    timeouts: Timeouts,
 ) -> Arc<dyn PlatformExecutor> {
-    Arc::new(macos::MacOSExecutor::new(window))
+    Arc::new(macos::MacOSExecutor::new(window, timeouts))
 }
 
 /// Create a platform-specific executor for the given window
 #[cfg(target_os = "windows")]
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
+    timeouts: Timeouts,
 ) -> Arc<dyn PlatformExecutor> {
-    Arc::new(windows::WindowsExecutor::new(window))
+    Arc::new(windows::WindowsExecutor::new(window, timeouts))
 }
 
 /// Create a platform-specific executor for the given window
 #[cfg(target_os = "linux")]
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
+    timeouts: Timeouts,
 ) -> Arc<dyn PlatformExecutor> {
-    Arc::new(linux::LinuxExecutor::new(window))
+    Arc::new(linux::LinuxExecutor::new(window, timeouts))
 }

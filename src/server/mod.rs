@@ -11,7 +11,7 @@ pub mod router;
 
 use crate::platform::{create_executor, PlatformExecutor};
 use crate::server::response::WebDriverErrorResponse;
-use crate::webdriver::SessionManager;
+use crate::webdriver::{SessionManager, Timeouts};
 
 /// Shared state for the `WebDriver` server
 pub struct AppState<R: Runtime> {
@@ -31,12 +31,13 @@ impl<R: Runtime + 'static> AppState<R> {
     pub fn get_executor_for_window(
         &self,
         window_label: &str,
+        timeouts: Timeouts,
     ) -> Result<Arc<dyn PlatformExecutor>, WebDriverErrorResponse> {
         self.app
             .webview_windows()
             .get(window_label)
             .cloned()
-            .map(|window| create_executor(window))
+            .map(|window| create_executor(window, timeouts))
             .ok_or_else(WebDriverErrorResponse::no_such_window)
     }
 

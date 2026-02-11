@@ -109,6 +109,14 @@ impl WebDriverErrorResponse {
             "Element does not have a shadow root",
         )
     }
+
+    pub fn script_timeout() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "script timeout",
+            "Script execution timed out",
+        )
+    }
 }
 
 impl IntoResponse for WebDriverErrorResponse {

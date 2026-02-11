@@ -23,9 +23,10 @@ pub async fn dismiss<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.dismiss_alert().await?;
 
     Ok(WebDriverResponse::null())
@@ -41,9 +42,10 @@ pub async fn accept<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.accept_alert().await?;
 
     Ok(WebDriverResponse::null())
@@ -59,9 +61,10 @@ pub async fn get_text<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let text: String = executor.get_alert_text().await?;
 
     Ok(WebDriverResponse::success(text))
@@ -78,9 +81,10 @@ pub async fn send_text<R: Runtime + 'static>(
         .get(&session_id)
         .ok_or_else(|| WebDriverErrorResponse::invalid_session_id(&session_id))?;
     let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts)?;
     executor.send_alert_text(&request.text).await?;
 
     Ok(WebDriverResponse::null())

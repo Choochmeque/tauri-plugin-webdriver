@@ -12,16 +12,18 @@ use crate::platform::{
     Cookie, ElementRect, FrameId, PlatformExecutor, PointerEventType, PrintOptions, WindowRect,
 };
 use crate::server::response::WebDriverErrorResponse;
+use crate::webdriver::Timeouts;
 
 /// Linux `WebKitGTK` executor
 #[derive(Clone)]
 pub struct LinuxExecutor<R: Runtime> {
     window: WebviewWindow<R>,
+    timeouts: Timeouts,
 }
 
 impl<R: Runtime> LinuxExecutor<R> {
-    pub fn new(window: WebviewWindow<R>) -> Self {
-        Self { window }
+    pub fn new(window: WebviewWindow<R>, timeouts: Timeouts) -> Self {
+        Self { window, timeouts }
     }
 }
 
@@ -71,14 +73,15 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
             return Err(WebDriverErrorResponse::javascript_error(&e.to_string()));
         }
 
-        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+        match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(Ok(value))) => Ok(serde_json::json!({
                 "success": true,
                 "value": value
             })),
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error)),
             Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error("Channel closed")),
-            Err(_) => Err(WebDriverErrorResponse::javascript_error("Script timeout")),
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }
 
@@ -697,7 +700,6 @@ impl<R: Runtime + 'static> PlatformExecutor for LinuxExecutor<R> {
         &self,
         script: &str,
         args: &[Value],
-        _timeout_ms: u64,
     ) -> Result<Value, WebDriverErrorResponse> {
         let args_json = serde_json::to_string(args)
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
