@@ -66,6 +66,7 @@ describe('Actions API', () => {
 
     it('should type with Shift modifier', async () => {
       const input = await $('[data-testid="text-input"]');
+      await input.clearValue();
       await input.click();
 
       // Type uppercase using shift
@@ -264,6 +265,7 @@ describe('Actions API', () => {
     it('should release all actions', async () => {
       // Perform some actions
       const input = await $('[data-testid="text-input"]');
+      await input.clearValue();
       await input.click();
       await browser.keys(['S', 'h', 'i', 'f', 't']);
 
@@ -278,7 +280,7 @@ describe('Actions API', () => {
   describe('Combined Actions', () => {
     it('should perform click and type in sequence', async () => {
       const input = await $('[data-testid="text-input"]');
-
+      await input.clearValue();
       await input.click();
       await browser.keys(['C', 'o', 'm', 'b', 'i', 'n', 'e', 'd']);
 
