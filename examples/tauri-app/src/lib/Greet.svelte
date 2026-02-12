@@ -5,18 +5,21 @@
   let greetMsg = $state("")
 
   async function greet(){
-    // Learn more about Tauri commands at https://v2.tauri.app/develop/calling-rust/#commands
     greetMsg = await invoke("greet", { name })
   }
 </script>
 
-<div>
+<div data-testid="greet-container">
   <div class="row">
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button onclick={greet}>
+    <input
+      id="greet-input"
+      data-testid="greet-input"
+      placeholder="Enter a name..."
+      bind:value={name}
+    />
+    <button data-testid="greet-button" onclick={greet}>
       Greet
     </button>
   </div>
-  <p>{greetMsg}</p>
+  <p data-testid="greet-message">{greetMsg}</p>
 </div>
-
