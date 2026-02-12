@@ -857,6 +857,58 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                     return true;
                 }})()"
             )
+        } else if is_down
+            && (js_key == "ArrowDown"
+                || js_key == "ArrowUp"
+                || js_key == "ArrowLeft"
+                || js_key == "ArrowRight")
+        {
+            // Handle arrow keys on radio buttons for navigation
+            let go_forward = js_key == "ArrowDown" || js_key == "ArrowRight";
+            format!(
+                r#"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event first
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is a radio button, handle navigation
+                    if (activeEl.tagName === 'INPUT' && activeEl.type === 'radio' && activeEl.name) {{
+                        var name = activeEl.name;
+                        var radios = Array.from(document.querySelectorAll("input[type='radio'][name='" + name + "']"));
+                        var currentIndex = radios.indexOf(activeEl);
+
+                        if (currentIndex !== -1 && radios.length > 1) {{
+                            var nextIndex;
+                            if ({go_forward}) {{
+                                // ArrowDown/ArrowRight - go to next
+                                nextIndex = (currentIndex + 1) % radios.length;
+                            }} else {{
+                                // ArrowUp/ArrowLeft - go to previous
+                                nextIndex = (currentIndex - 1 + radios.length) % radios.length;
+                            }}
+
+                            var nextRadio = radios[nextIndex];
+                            nextRadio.checked = true;
+                            nextRadio.focus();
+
+                            // Dispatch change event
+                            var changeEvent = new Event('change', {{ bubbles: true }});
+                            nextRadio.dispatchEvent(changeEvent);
+                        }}
+                    }}
+
+                    return true;
+                }})()"#
+            )
         } else {
             format!(
                 r"(function() {{
