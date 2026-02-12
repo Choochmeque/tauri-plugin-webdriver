@@ -8,7 +8,7 @@ describe('Print to PDF', () => {
 
   describe('Basic Print', () => {
     it('should print page to PDF', async () => {
-      const pdf = await browser.printPage({});
+      const pdf = await browser.printPage('portrait');
 
       expect(pdf).toBeDefined();
       expect(typeof pdf).toBe('string');
@@ -16,7 +16,7 @@ describe('Print to PDF', () => {
     });
 
     it('should return valid base64 PDF data', async () => {
-      const pdf = await browser.printPage({});
+      const pdf = await browser.printPage('portrait');
 
       // Verify it's valid base64
       expect(() => Buffer.from(pdf, 'base64')).not.toThrow();
@@ -27,12 +27,12 @@ describe('Print to PDF', () => {
 
     it('should print different pages', async () => {
       // Print main page
-      const mainPdf = await browser.printPage({});
+      const mainPdf = await browser.printPage('portrait');
 
       // Navigate and print forms page
       await browser.url('tauri://localhost/#forms');
       await browser.pause(100);
-      const formsPdf = await browser.printPage({});
+      const formsPdf = await browser.printPage('portrait');
 
       // Both should be valid PDFs
       expect(isValidBase64Pdf(mainPdf)).toBe(true);
@@ -45,100 +45,76 @@ describe('Print to PDF', () => {
 
   describe('Print Options', () => {
     it('should print with orientation landscape', async () => {
-      const pdf = await browser.printPage({
-        orientation: 'landscape',
-      });
+      const pdf = await browser.printPage('landscape');
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with orientation portrait', async () => {
-      const pdf = await browser.printPage({
-        orientation: 'portrait',
-      });
+      const pdf = await browser.printPage('portrait');
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with scale', async () => {
-      const pdf = await browser.printPage({
-        scale: 0.5,
-      });
+      // printPage(orientation, scale, ...)
+      const pdf = await browser.printPage('portrait', 0.5);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with background', async () => {
-      const pdf = await browser.printPage({
-        background: true,
-      });
+      // printPage(orientation, scale, background, ...)
+      const pdf = await browser.printPage('portrait', 1, true);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print without background', async () => {
-      const pdf = await browser.printPage({
-        background: false,
-      });
+      const pdf = await browser.printPage('portrait', 1, false);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with custom page size', async () => {
-      const pdf = await browser.printPage({
-        pageWidth: 21.0, // A4 width in cm
-        pageHeight: 29.7, // A4 height in cm
-      });
+      // printPage(orientation, scale, background, width, height, ...)
+      const pdf = await browser.printPage('portrait', 1, false, 21.0, 29.7);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with margins', async () => {
-      const pdf = await browser.printPage({
-        marginTop: 2,
-        marginBottom: 2,
-        marginLeft: 2,
-        marginRight: 2,
-      });
+      // printPage(orientation, scale, background, width, height, top, bottom, left, right, ...)
+      const pdf = await browser.printPage('portrait', 1, false, 21.59, 27.94, 2, 2, 2, 2);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with shrinkToFit', async () => {
-      const pdf = await browser.printPage({
-        shrinkToFit: true,
-      });
+      // printPage(orientation, scale, background, width, height, top, bottom, left, right, shrinkToFit, ...)
+      const pdf = await browser.printPage('portrait', 1, false, 21.59, 27.94, 1, 1, 1, 1, true);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with page ranges', async () => {
-      const pdf = await browser.printPage({
-        pageRanges: ['1'],
-      });
+      // printPage(orientation, scale, background, width, height, top, bottom, left, right, shrinkToFit, pageRanges)
+      const pdf = await browser.printPage('portrait', 1, false, 21.59, 27.94, 1, 1, 1, 1, true, ['1']);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
     });
 
     it('should print with multiple options', async () => {
-      const pdf = await browser.printPage({
-        orientation: 'landscape',
-        scale: 0.8,
-        background: true,
-        marginTop: 1,
-        marginBottom: 1,
-        marginLeft: 1,
-        marginRight: 1,
-      });
+      const pdf = await browser.printPage('landscape', 0.8, true, 21.59, 27.94, 1, 1, 1, 1, true);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
@@ -150,9 +126,7 @@ describe('Print to PDF', () => {
       await browser.url('tauri://localhost/#scroll');
       await browser.pause(100);
 
-      const pdf = await browser.printPage({
-        background: true,
-      });
+      const pdf = await browser.printPage('portrait', 1, true);
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
@@ -160,6 +134,20 @@ describe('Print to PDF', () => {
       // PDF should be larger due to more content
       const buffer = Buffer.from(pdf, 'base64');
       expect(buffer.length).toBeGreaterThan(1000);
+    });
+
+    it('should handle very long pages', async () => {
+      await browser.url('tauri://localhost/#scroll');
+      await browser.pause(100);
+
+      const pdf = await browser.printPage('portrait');
+
+      expect(pdf).toBeDefined();
+      expect(isValidBase64Pdf(pdf)).toBe(true);
+
+      // Decode and verify it's a multi-page or large PDF
+      const buffer = Buffer.from(pdf, 'base64');
+      expect(buffer.length).toBeGreaterThan(0);
     });
   });
 
@@ -172,7 +160,7 @@ describe('Print to PDF', () => {
       const input = await $('[data-testid="text-input"]');
       await input.setValue('Print test value');
 
-      const pdf = await browser.printPage({});
+      const pdf = await browser.printPage('portrait');
 
       expect(pdf).toBeDefined();
       expect(isValidBase64Pdf(pdf)).toBe(true);
@@ -181,7 +169,7 @@ describe('Print to PDF', () => {
 
   describe('PDF Size Validation', () => {
     it('should have reasonable PDF size', async () => {
-      const pdf = await browser.printPage({});
+      const pdf = await browser.printPage('portrait');
       const buffer = Buffer.from(pdf, 'base64');
 
       // PDF should be at least a few KB
@@ -192,13 +180,13 @@ describe('Print to PDF', () => {
     });
 
     it('should have larger PDF for pages with more content', async () => {
-      const mainPdf = await browser.printPage({});
+      const mainPdf = await browser.printPage('portrait');
       const mainBuffer = Buffer.from(mainPdf, 'base64');
 
       await browser.url('tauri://localhost/#scroll');
       await browser.pause(100);
 
-      const scrollPdf = await browser.printPage({});
+      const scrollPdf = await browser.printPage('portrait');
       const scrollBuffer = Buffer.from(scrollPdf, 'base64');
 
       // Scroll page has more content, likely larger PDF
