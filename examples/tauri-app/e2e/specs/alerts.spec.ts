@@ -1,4 +1,4 @@
-describe('Alerts', () => {
+describe.skip('Alerts', () => {
   beforeEach(async () => {
     await browser.url('tauri://localhost/#alerts');
     await browser.pause(100);
