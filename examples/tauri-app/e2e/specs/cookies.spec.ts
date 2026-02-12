@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Cookies', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
     // Clear all cookies before each test
     await browser.deleteAllCookies();
   });
@@ -210,8 +211,7 @@ describe('Cookies', () => {
       });
 
       // Navigate to another page
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       const cookies = await browser.getAllCookies();
       const cookie = cookies.find((c) => c.name === 'persistCookie');

@@ -1,9 +1,8 @@
-import { isValidBase64Pdf } from '../helpers/test-utils.js';
+import { isValidBase64Pdf, navigateToTestPage } from '../helpers/test-utils.js';
 
 describe('Print to PDF', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
   });
 
   describe('Basic Print', () => {
@@ -30,8 +29,7 @@ describe('Print to PDF', () => {
       const mainPdf = await browser.printPage('portrait');
 
       // Navigate and print forms page
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
       const formsPdf = await browser.printPage('portrait');
 
       // Both should be valid PDFs
@@ -123,8 +121,7 @@ describe('Print to PDF', () => {
 
   describe('Print Long Content', () => {
     it('should print scrollable page', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const pdf = await browser.printPage('portrait', 1, true);
 
@@ -137,8 +134,7 @@ describe('Print to PDF', () => {
     });
 
     it('should handle very long pages', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const pdf = await browser.printPage('portrait');
 
@@ -153,8 +149,7 @@ describe('Print to PDF', () => {
 
   describe('Print Form Page', () => {
     it('should print page with form elements', async () => {
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       // Fill some form data
       const input = await $('[data-testid="text-input"]');
@@ -183,8 +178,7 @@ describe('Print to PDF', () => {
       const mainPdf = await browser.printPage('portrait');
       const mainBuffer = Buffer.from(mainPdf, 'base64');
 
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const scrollPdf = await browser.printPage('portrait');
       const scrollBuffer = Buffer.from(scrollPdf, 'base64');

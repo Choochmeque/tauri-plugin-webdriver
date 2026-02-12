@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Actions API', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#forms');
-    await browser.pause(100);
+    await navigateToTestPage('forms');
   });
 
   describe('Keyboard Actions', () => {
@@ -195,8 +196,7 @@ describe('Actions API', () => {
 
   describe('Scroll Actions', () => {
     it('should scroll to element', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const bottomMarker = await $('[data-testid="bottom-marker"]');
       await bottomMarker.scrollIntoView();
@@ -206,8 +206,7 @@ describe('Actions API', () => {
     });
 
     it('should scroll using wheel action', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       // Get initial scroll position
       const initialScroll = await browser.execute(() => window.scrollY);
@@ -230,8 +229,7 @@ describe('Actions API', () => {
     });
 
     it('should scroll to bottom using button', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const scrollButton = await $('[data-testid="scroll-to-bottom"]');
       await scrollButton.click();
@@ -243,8 +241,7 @@ describe('Actions API', () => {
     });
 
     it('should scroll to top', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       // First scroll down
       await browser.execute(() => window.scrollTo(0, 1000));

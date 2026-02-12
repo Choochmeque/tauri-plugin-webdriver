@@ -1,7 +1,9 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Shadow DOM', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#shadow');
-    await browser.pause(200); // Allow time for shadow DOM to be created
+    await navigateToTestPage('shadow');
+    await browser.pause(100); // Allow time for shadow DOM to be created
   });
 
   describe('Get Shadow Root', () => {

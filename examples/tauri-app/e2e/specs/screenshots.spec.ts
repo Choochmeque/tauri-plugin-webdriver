@@ -1,9 +1,8 @@
-import { isValidBase64Png } from '../helpers/test-utils.js';
+import { isValidBase64Png, navigateToTestPage } from '../helpers/test-utils.js';
 
 describe('Screenshots', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
   });
 
   describe('Full Page Screenshot', () => {
@@ -30,8 +29,7 @@ describe('Screenshots', () => {
       const mainScreenshot = await browser.takeScreenshot();
 
       // Navigate to forms and take screenshot
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
       const formsScreenshot = await browser.takeScreenshot();
 
       // Screenshots should be different
@@ -39,8 +37,7 @@ describe('Screenshots', () => {
     });
 
     it('should capture page with scroll content', async () => {
-      await browser.url('tauri://localhost/#scroll');
-      await browser.pause(100);
+      await navigateToTestPage('scroll');
 
       const screenshot = await browser.takeScreenshot();
       expect(screenshot).toBeDefined();
@@ -82,8 +79,7 @@ describe('Screenshots', () => {
     });
 
     it('should capture form element', async () => {
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       const form = await $('[data-testid="test-form"]');
       const screenshot = await form.takeScreenshot();
@@ -104,8 +100,7 @@ describe('Screenshots', () => {
     });
 
     it('should capture element after state change', async () => {
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       const checkbox = await $('[data-testid="checkbox"]');
 

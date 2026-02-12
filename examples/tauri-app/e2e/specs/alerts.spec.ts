@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe.skip('Alerts', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#alerts');
-    await browser.pause(100);
+    await navigateToTestPage('alerts');
   });
 
   describe('Alert Dialog', () => {

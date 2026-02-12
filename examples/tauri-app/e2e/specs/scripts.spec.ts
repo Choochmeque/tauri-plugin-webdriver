@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Script Execution', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
   });
 
   describe('Synchronous Script Execution', () => {

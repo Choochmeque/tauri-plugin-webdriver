@@ -1,9 +1,11 @@
+import { browser, $ } from '@wdio/globals';
+
 export const WEBDRIVER_PORT = 4445;
 export const BASE_URL = 'tauri://localhost';
 
 export async function resetAppState(): Promise<void> {
-  // Navigate to main page
-  await browser.url(`${BASE_URL}/#main`);
+  // Navigate to main page using click
+  await navigateToTestPage('main');
 
   // Clear cookies
   await browser.deleteAllCookies();
@@ -16,7 +18,10 @@ export async function resetAppState(): Promise<void> {
 }
 
 export async function navigateToTestPage(page: string): Promise<void> {
-  await browser.url(`${BASE_URL}/#${page}`);
+  // Use click-based navigation instead of browser.url() for hash routes
+  // browser.url() with tauri:// scheme doesn't work on Windows WebView2
+  const navLink = await browser.$(`[data-testid="nav-${page}"]`);
+  await navLink.click();
   // Wait for route to load
   await browser.pause(100);
 }

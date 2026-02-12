@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Frames', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#frames');
-    await browser.pause(100);
+    await navigateToTestPage('frames');
   });
 
   describe('Switch to Frame', () => {

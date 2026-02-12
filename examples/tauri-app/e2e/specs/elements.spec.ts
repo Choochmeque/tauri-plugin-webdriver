@@ -1,7 +1,8 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Element Operations', () => {
   beforeEach(async () => {
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
   });
 
   describe('Finding Elements', () => {
@@ -103,8 +104,7 @@ describe('Element Operations', () => {
   describe('Element Interaction', () => {
     describe('Click', () => {
       it('should click a button', async () => {
-        await browser.url('tauri://localhost/#forms');
-        await browser.pause(100);
+        await navigateToTestPage('forms');
 
         const checkbox = await $('[data-testid="checkbox"]');
         expect(await checkbox.isSelected()).toBe(false);
@@ -142,8 +142,7 @@ describe('Element Operations', () => {
       });
 
       it('should type into textarea', async () => {
-        await browser.url('tauri://localhost/#forms');
-        await browser.pause(100);
+        await navigateToTestPage('forms');
 
         const textarea = await $('[data-testid="textarea"]');
         await textarea.setValue('Multi-line\ntext\ncontent');
@@ -282,16 +281,14 @@ describe('Element Operations', () => {
 
     describe('Selected State', () => {
       it('should return false for unchecked checkbox', async () => {
-        await browser.url('tauri://localhost/#forms');
-        await browser.pause(100);
+        await navigateToTestPage('forms');
 
         const checkbox = await $('[data-testid="checkbox"]');
         expect(await checkbox.isSelected()).toBe(false);
       });
 
       it('should return true for checked checkbox', async () => {
-        await browser.url('tauri://localhost/#forms');
-        await browser.pause(100);
+        await navigateToTestPage('forms');
 
         const checkbox = await $('[data-testid="checkbox"]');
         await checkbox.click();
@@ -299,8 +296,7 @@ describe('Element Operations', () => {
       });
 
       it('should handle radio button selection', async () => {
-        await browser.url('tauri://localhost/#forms');
-        await browser.pause(100);
+        await navigateToTestPage('forms');
 
         const radio1 = await $('[data-testid="radio-1"]');
         const radio2 = await $('[data-testid="radio-2"]');

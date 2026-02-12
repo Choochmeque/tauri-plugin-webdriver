@@ -1,13 +1,14 @@
+import { navigateToTestPage } from '../helpers/test-utils.js';
+
 describe('Navigation', () => {
   beforeEach(async () => {
     // Navigate to main page before each test
-    await browser.url('tauri://localhost/#main');
-    await browser.pause(100);
+    await navigateToTestPage('main');
   });
 
   describe('URL Navigation', () => {
     it('should navigate to a URL', async () => {
-      await browser.url('tauri://localhost/#forms');
+      await navigateToTestPage('forms');
       const url = await browser.getUrl();
       expect(url).toContain('#forms');
     });
@@ -20,12 +21,12 @@ describe('Navigation', () => {
     });
 
     it('should navigate to different hash routes', async () => {
-      const routes = ['#forms', '#frames', '#shadow', '#alerts', '#scroll', '#main'];
+      const routes = ['forms', 'frames', 'shadow', 'alerts', 'scroll', 'main'];
 
       for (const route of routes) {
-        await browser.url(`tauri://localhost/${route}`);
+        await navigateToTestPage(route);
         const url = await browser.getUrl();
-        expect(url).toContain(route);
+        expect(url).toContain(`#${route}`);
       }
     });
   });
@@ -43,12 +44,10 @@ describe('Navigation', () => {
   describe('History Navigation', () => {
     it('should navigate back in history', async () => {
       // Navigate to forms page
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       // Navigate to alerts page
-      await browser.url('tauri://localhost/#alerts');
-      await browser.pause(100);
+      await navigateToTestPage('alerts');
 
       // Go back
       await browser.back();
@@ -60,12 +59,10 @@ describe('Navigation', () => {
 
     it('should navigate forward in history', async () => {
       // Navigate to forms page
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       // Navigate to alerts page
-      await browser.url('tauri://localhost/#alerts');
-      await browser.pause(100);
+      await navigateToTestPage('alerts');
 
       // Go back
       await browser.back();
@@ -83,8 +80,7 @@ describe('Navigation', () => {
   describe('Page Refresh', () => {
     it('should refresh the page', async () => {
       // Navigate to forms page
-      await browser.url('tauri://localhost/#forms');
-      await browser.pause(100);
+      await navigateToTestPage('forms');
 
       // Type something in an input
       const input = await $('[data-testid="text-input"]');
