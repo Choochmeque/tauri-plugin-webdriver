@@ -209,6 +209,10 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Get element attribute value
+    /// Per W3C WebDriver spec, certain attributes should return current property values:
+    /// - "value" on input/textarea returns current value property
+    /// - "checked" on checkbox/radio returns current checked state
+    /// - "selected" on option returns current selected state
     async fn get_element_attribute(
         &self,
         js_var: &str,
@@ -221,6 +225,26 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
+                var attrName = '{escaped_name}'.toLowerCase();
+                var tagName = el.tagName.toLowerCase();
+
+                // Per W3C WebDriver spec, return property values for certain attributes
+                if (attrName === 'value') {{
+                    if (tagName === 'input' || tagName === 'textarea') {{
+                        return el.value;
+                    }}
+                }}
+                if (attrName === 'checked') {{
+                    if (tagName === 'input' && (el.type === 'checkbox' || el.type === 'radio')) {{
+                        return el.checked ? 'true' : null;
+                    }}
+                }}
+                if (attrName === 'selected') {{
+                    if (tagName === 'option') {{
+                        return el.selected ? 'true' : null;
+                    }}
+                }}
+
                 return el.getAttribute('{escaped_name}');
             }})()"
         );
@@ -369,6 +393,11 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 }}
                 el.scrollIntoView({{ block: 'center', inline: 'center' }});
                 el.click();
+                // Explicitly focus the element after click - programmatic click()
+                // doesn't always trigger focus like a real click would
+                if (typeof el.focus === 'function') {{
+                    el.focus();
+                }}
                 return true;
             }})()"
         );
