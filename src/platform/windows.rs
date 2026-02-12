@@ -173,66 +173,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
     }
 
     // =========================================================================
-    // Actions (Keyboard/Pointer)
-    // =========================================================================
-
-    async fn dispatch_key_event(
-        &self,
-        key: &str,
-        is_down: bool,
-    ) -> Result<(), WebDriverErrorResponse> {
-        let (js_key, js_code, key_code) = match key {
-            "\u{E007}" => ("Enter", "Enter", 13),
-            "\u{E003}" => ("Backspace", "Backspace", 8),
-            "\u{E004}" => ("Tab", "Tab", 9),
-            "\u{E006}" => ("Enter", "NumpadEnter", 13),
-            "\u{E00C}" => ("Escape", "Escape", 27),
-            "\u{E00D}" => (" ", "Space", 32),
-            "\u{E012}" => ("ArrowLeft", "ArrowLeft", 37),
-            "\u{E013}" => ("ArrowUp", "ArrowUp", 38),
-            "\u{E014}" => ("ArrowRight", "ArrowRight", 39),
-            "\u{E015}" => ("ArrowDown", "ArrowDown", 40),
-            "\u{E017}" => ("Delete", "Delete", 46),
-            "\u{E008}" => ("Shift", "ShiftLeft", 16),
-            "\u{E009}" => ("Control", "ControlLeft", 17),
-            "\u{E00A}" => ("Alt", "AltLeft", 18),
-            "\u{E03D}" => ("Meta", "MetaLeft", 91),
-            _ => {
-                let ch = key.chars().next().unwrap_or(' ');
-                let upper = ch.to_ascii_uppercase();
-                let code = if ch.is_ascii_alphabetic() {
-                    format!("Key{upper}")
-                } else if ch.is_ascii_digit() {
-                    format!("Digit{ch}")
-                } else {
-                    key.to_string()
-                };
-                return self.dispatch_regular_key(key, &code, is_down).await;
-            }
-        };
-
-        let event_type = if is_down { "keydown" } else { "keyup" };
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{js_key}',
-                    code: '{js_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
-
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
-    // =========================================================================
     // Alerts
     // =========================================================================
 
@@ -276,39 +216,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
 // =============================================================================
 
 impl<R: Runtime + 'static> WindowsExecutor<R> {
-    async fn dispatch_regular_key(
-        &self,
-        key: &str,
-        code: &str,
-        is_down: bool,
-    ) -> Result<(), WebDriverErrorResponse> {
-        let ch = key.chars().next().unwrap_or(' ');
-        let key_code = ch as u32;
-        let event_type = if is_down { "keydown" } else { "keyup" };
-
-        let escaped_key = key.replace('\\', "\\\\").replace('\'', "\\'");
-        let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
-
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{escaped_key}',
-                    code: '{escaped_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
-
-        self.evaluate_js(&script).await?;
-        Ok(())
-    }
-
     async fn take_js_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
         // JavaScript-based screenshot using canvas
         let script = r"(function() {
