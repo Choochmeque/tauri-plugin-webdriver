@@ -7,6 +7,7 @@ describe('Actions API', () => {
   describe('Keyboard Actions', () => {
     it('should type using keyboard actions', async () => {
       const input = await $('[data-testid="text-input"]');
+      await input.clearValue();
       await input.click();
 
       await browser.keys(['H', 'e', 'l', 'l', 'o']);
@@ -17,6 +18,7 @@ describe('Actions API', () => {
 
     it('should use special keys', async () => {
       const input = await $('[data-testid="text-input"]');
+      await input.clearValue();
       await input.click();
 
       await browser.keys(['T', 'e', 's', 't']);
@@ -28,6 +30,7 @@ describe('Actions API', () => {
 
     it('should use Enter key', async () => {
       const input = await $('[data-testid="text-input"]');
+      await input.clearValue();
       await input.click();
 
       await browser.keys(['T', 'e', 's', 't', 'Enter']);
