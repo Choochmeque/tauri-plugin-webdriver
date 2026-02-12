@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,8 +12,12 @@ export function getAppPath(): string {
   const base = resolve(__dirname, '../../src-tauri/target/release');
 
   switch (process.platform) {
-    case 'darwin':
-      return resolve(base, 'bundle/macos/tauri-app.app/Contents/MacOS/tauri-app');
+    case 'darwin': {
+      // Try bundled app first, fall back to unbundled binary (--no-bundle)
+      const bundledPath = resolve(base, 'bundle/macos/tauri-app.app/Contents/MacOS/tauri-app');
+      const unbundledPath = resolve(base, 'tauri-app');
+      return existsSync(bundledPath) ? bundledPath : unbundledPath;
+    }
     case 'win32':
       return resolve(base, 'tauri-app.exe');
     case 'linux':
@@ -26,8 +31,12 @@ export function getDevAppPath(): string {
   const base = resolve(__dirname, '../../src-tauri/target/debug');
 
   switch (process.platform) {
-    case 'darwin':
-      return resolve(base, 'bundle/macos/tauri-app.app/Contents/MacOS/tauri-app');
+    case 'darwin': {
+      // Try bundled app first, fall back to unbundled binary
+      const bundledPath = resolve(base, 'bundle/macos/tauri-app.app/Contents/MacOS/tauri-app');
+      const unbundledPath = resolve(base, 'tauri-app');
+      return existsSync(bundledPath) ? bundledPath : unbundledPath;
+    }
     case 'win32':
       return resolve(base, 'tauri-app.exe');
     case 'linux':
