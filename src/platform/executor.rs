@@ -738,21 +738,79 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         };
 
         let event_type = if is_down { "keydown" } else { "keyup" };
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{js_key}',
-                    code: '{js_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
+
+        // For special keys that modify input (Backspace, Delete), handle value changes
+        let script = if is_down && (js_key == "Backspace" || js_key == "Delete") {
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is an input or textarea, handle deletion
+                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            activeEl.tagName === 'INPUT'
+                                ? window.HTMLInputElement.prototype
+                                : window.HTMLTextAreaElement.prototype,
+                            'value'
+                        ).set;
+
+                        var currentValue = activeEl.value;
+                        var newValue;
+                        var inputType;
+
+                        if ('{js_key}' === 'Backspace' && currentValue.length > 0) {{
+                            newValue = currentValue.slice(0, -1);
+                            inputType = 'deleteContentBackward';
+                        }} else if ('{js_key}' === 'Delete') {{
+                            newValue = currentValue.slice(1);
+                            inputType = 'deleteContentForward';
+                        }} else {{
+                            newValue = currentValue;
+                            inputType = 'deleteContentBackward';
+                        }}
+
+                        nativeInputValueSetter.call(activeEl, newValue);
+
+                        // Dispatch input event
+                        var inputEvent = new InputEvent('input', {{
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: inputType
+                        }});
+                        activeEl.dispatchEvent(inputEvent);
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else {
+            format!(
+                r"(function() {{
+                    var event = new KeyboardEvent('{event_type}', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    var activeEl = document.activeElement || document.body;
+                    activeEl.dispatchEvent(event);
+                    return true;
+                }})()"
+            )
+        };
 
         self.evaluate_js(&script).await?;
         Ok(())
@@ -772,21 +830,66 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let escaped_key = key.replace('\\', "\\\\").replace('\'', "\\'");
         let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
 
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{escaped_key}',
-                    code: '{escaped_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
+        // For keydown events on printable characters, also update input value
+        // and dispatch InputEvent to simulate actual typing
+        let script = if is_down {
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is an input or textarea, update value and dispatch input event
+                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            activeEl.tagName === 'INPUT'
+                                ? window.HTMLInputElement.prototype
+                                : window.HTMLTextAreaElement.prototype,
+                            'value'
+                        ).set;
+
+                        var newValue = activeEl.value + '{escaped_key}';
+                        nativeInputValueSetter.call(activeEl, newValue);
+
+                        // Dispatch input event
+                        var inputEvent = new InputEvent('input', {{
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: 'insertText',
+                            data: '{escaped_key}'
+                        }});
+                        activeEl.dispatchEvent(inputEvent);
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else {
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+                    var event = new KeyboardEvent('{event_type}', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(event);
+                    return true;
+                }})()"
+            )
+        };
 
         self.evaluate_js(&script).await?;
         Ok(())
