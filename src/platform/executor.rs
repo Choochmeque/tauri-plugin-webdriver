@@ -6,6 +6,28 @@ use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
 
+/// Tracks the state of modifier keys during action sequences
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ModifierState {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+impl ModifierState {
+    /// Update modifier state when a key is pressed or released
+    pub fn update(&mut self, key: &str, is_down: bool) {
+        match key {
+            "\u{E009}" => self.ctrl = is_down,  // Control
+            "\u{E008}" => self.shift = is_down, // Shift
+            "\u{E00A}" => self.alt = is_down,   // Alt
+            "\u{E03D}" => self.meta = is_down,  // Meta
+            _ => {}
+        }
+    }
+}
+
 /// Platform-agnostic trait for `WebView` operations.
 /// Each platform (macOS, Windows, Linux) implements this trait.
 #[async_trait]
@@ -718,11 +740,12 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // Actions (Keyboard/Pointer)
     // =========================================================================
 
-    /// Dispatch a keyboard event
+    /// Dispatch a keyboard event with modifier state
     async fn dispatch_key_event(
         &self,
         key: &str,
         is_down: bool,
+        modifiers: &ModifierState,
     ) -> Result<(), WebDriverErrorResponse> {
         let (js_key, js_code, key_code) = match key {
             "\u{E007}" => ("Enter", "Enter", 13),
@@ -762,7 +785,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 } else {
                     key.to_string()
                 };
-                return self.dispatch_regular_key(key, &code, is_down).await;
+                return self.dispatch_regular_key(key, &code, is_down, modifiers).await;
             }
         };
 
@@ -795,21 +818,32 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                         ).set;
 
                         var currentValue = activeEl.value;
+                        var selStart = activeEl.selectionStart;
+                        var selEnd = activeEl.selectionEnd;
                         var newValue;
                         var inputType;
 
-                        if ('{js_key}' === 'Backspace' && currentValue.length > 0) {{
-                            newValue = currentValue.slice(0, -1);
+                        // Check if there's a selection
+                        if (selStart !== selEnd) {{
+                            // Delete selection
+                            newValue = currentValue.slice(0, selStart) + currentValue.slice(selEnd);
                             inputType = 'deleteContentBackward';
-                        }} else if ('{js_key}' === 'Delete') {{
-                            newValue = currentValue.slice(1);
+                            // Set cursor position after deletion
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart, selStart);
+                        }} else if ('{js_key}' === 'Backspace' && selStart > 0) {{
+                            newValue = currentValue.slice(0, selStart - 1) + currentValue.slice(selStart);
+                            inputType = 'deleteContentBackward';
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart - 1, selStart - 1);
+                        }} else if ('{js_key}' === 'Delete' && selStart < currentValue.length) {{
+                            newValue = currentValue.slice(0, selStart) + currentValue.slice(selStart + 1);
                             inputType = 'deleteContentForward';
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart, selStart);
                         }} else {{
-                            newValue = currentValue;
-                            inputType = 'deleteContentBackward';
+                            return true; // Nothing to delete
                         }}
-
-                        nativeInputValueSetter.call(activeEl, newValue);
 
                         // Dispatch input event
                         var inputEvent = new InputEvent('input', {{
@@ -845,12 +879,13 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         Ok(())
     }
 
-    /// Dispatch a regular (non-special) key event
+    /// Dispatch a regular (non-special) key event with modifier state
     async fn dispatch_regular_key(
         &self,
         key: &str,
         code: &str,
         is_down: bool,
+        modifiers: &ModifierState,
     ) -> Result<(), WebDriverErrorResponse> {
         let ch = key.chars().next().unwrap_or(' ');
         let key_code = ch as u32;
@@ -859,44 +894,91 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let escaped_key = key.replace('\\', "\\\\").replace('\'', "\\'");
         let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
 
-        // For keydown events on printable characters, also update input value
-        // and dispatch InputEvent to simulate actual typing
-        let script = if is_down {
+        let ctrl_key = modifiers.ctrl;
+        let meta_key = modifiers.meta;
+        let shift_key = modifiers.shift;
+        let alt_key = modifiers.alt;
+
+        // Check for Ctrl+A or Meta+A (select all)
+        let is_select_all = is_down
+            && (ch == 'a' || ch == 'A')
+            && (ctrl_key || meta_key);
+
+        let script = if is_select_all {
+            // Handle Ctrl+A / Meta+A: select all text
             format!(
                 r"(function() {{
                     var activeEl = document.activeElement || document.body;
 
-                    // Dispatch keydown event
+                    // Dispatch keydown event with modifiers
                     var keydownEvent = new KeyboardEvent('keydown', {{
                         key: '{escaped_key}',
                         code: '{escaped_code}',
                         keyCode: {key_code},
                         which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // Select all text in input/textarea
+                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                        activeEl.select();
+                    }} else {{
+                        document.execCommand('selectAll', false, null);
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else if is_down {
+            // For keydown events on printable characters, update input value
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event with modifiers
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
                         bubbles: true,
                         cancelable: true
                     }});
                     activeEl.dispatchEvent(keydownEvent);
 
                     // If active element is an input or textarea, update value and dispatch input event
-                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
-                        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                            activeEl.tagName === 'INPUT'
-                                ? window.HTMLInputElement.prototype
-                                : window.HTMLTextAreaElement.prototype,
-                            'value'
-                        ).set;
+                    // Only do this for non-modifier key combos
+                    if (!{ctrl_key} && !{meta_key} && !{alt_key}) {{
+                        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                            var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                                activeEl.tagName === 'INPUT'
+                                    ? window.HTMLInputElement.prototype
+                                    : window.HTMLTextAreaElement.prototype,
+                                'value'
+                            ).set;
 
-                        var newValue = activeEl.value + '{escaped_key}';
-                        nativeInputValueSetter.call(activeEl, newValue);
+                            var newValue = activeEl.value + '{escaped_key}';
+                            nativeInputValueSetter.call(activeEl, newValue);
 
-                        // Dispatch input event
-                        var inputEvent = new InputEvent('input', {{
-                            bubbles: true,
-                            cancelable: true,
-                            inputType: 'insertText',
-                            data: '{escaped_key}'
-                        }});
-                        activeEl.dispatchEvent(inputEvent);
+                            // Dispatch input event
+                            var inputEvent = new InputEvent('input', {{
+                                bubbles: true,
+                                cancelable: true,
+                                inputType: 'insertText',
+                                data: '{escaped_key}'
+                            }});
+                            activeEl.dispatchEvent(inputEvent);
+                        }}
                     }}
 
                     return true;
@@ -911,6 +993,10 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                         code: '{escaped_code}',
                         keyCode: {key_code},
                         which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
                         bubbles: true,
                         cancelable: true
                     }});
