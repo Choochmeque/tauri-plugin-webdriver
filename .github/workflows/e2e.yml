@@ -51,7 +51,7 @@ jobs:
 
       - name: Build Tauri app
         working-directory: examples/tauri-app
-        run: pnpm tauri build
+        run: pnpm tauri build --no-bundle
 
       - name: Run e2e tests (Linux)
         if: matrix.os == 'ubuntu-latest'
