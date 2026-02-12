@@ -8,7 +8,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ExecuteScriptCom
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
-use crate::platform::{PlatformExecutor, PrintOptions, WindowRect};
+use crate::platform::{PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
 
@@ -26,7 +26,15 @@ impl<R: Runtime> WindowsExecutor<R> {
 }
 
 #[async_trait]
-impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
+impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
+    // =========================================================================
+    // Window Access
+    // =========================================================================
+
+    fn window(&self) -> &WebviewWindow<R> {
+        &self.window
+    }
+
     // =========================================================================
     // Core JavaScript Execution
     // =========================================================================
@@ -222,57 +230,6 @@ impl<R: Runtime + 'static> PlatformExecutor for WindowsExecutor<R> {
 
         self.evaluate_js(&script).await?;
         Ok(())
-    }
-
-    // =========================================================================
-    // Window Management
-    // =========================================================================
-
-    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        if let Ok(position) = self.window.outer_position() {
-            if let Ok(size) = self.window.outer_size() {
-                return Ok(WindowRect {
-                    x: position.x,
-                    y: position.y,
-                    width: size.width,
-                    height: size.height,
-                });
-            }
-        }
-        Ok(WindowRect::default())
-    }
-
-    async fn set_window_rect(
-        &self,
-        rect: WindowRect,
-    ) -> Result<WindowRect, WebDriverErrorResponse> {
-        use tauri::{PhysicalPosition, PhysicalSize};
-
-        let _ = self
-            .window
-            .set_position(PhysicalPosition::new(rect.x, rect.y));
-        let _ = self
-            .window
-            .set_size(PhysicalSize::new(rect.width, rect.height));
-
-        self.get_window_rect().await
-    }
-
-    async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        let _ = self.window.maximize();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        self.get_window_rect().await
-    }
-
-    async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
-        let _ = self.window.minimize();
-        Ok(())
-    }
-
-    async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        let _ = self.window.set_fullscreen(true);
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        self.get_window_rect().await
     }
 
     // =========================================================================

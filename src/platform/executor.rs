@@ -2,13 +2,21 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::Write;
+use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
 
 /// Platform-agnostic trait for `WebView` operations.
 /// Each platform (macOS, Windows, Linux) implements this trait.
 #[async_trait]
-pub trait PlatformExecutor: Send + Sync {
+pub trait PlatformExecutor<R: Runtime>: Send + Sync {
+    // =========================================================================
+    // Window Access
+    // =========================================================================
+
+    /// Get a reference to the underlying window
+    fn window(&self) -> &WebviewWindow<R>;
+
     // =========================================================================
     // Core JavaScript Execution
     // =========================================================================
@@ -767,20 +775,54 @@ pub trait PlatformExecutor: Send + Sync {
     // =========================================================================
 
     /// Get window rectangle (position and size)
-    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse>;
+    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        if let Ok(position) = self.window().outer_position() {
+            if let Ok(size) = self.window().outer_size() {
+                return Ok(WindowRect {
+                    x: position.x,
+                    y: position.y,
+                    width: size.width,
+                    height: size.height,
+                });
+            }
+        }
+        Ok(WindowRect::default())
+    }
 
     /// Set window rectangle (position and size)
-    async fn set_window_rect(&self, rect: WindowRect)
-        -> Result<WindowRect, WebDriverErrorResponse>;
+    async fn set_window_rect(
+        &self,
+        rect: WindowRect,
+    ) -> Result<WindowRect, WebDriverErrorResponse> {
+        let _ = self
+            .window()
+            .set_position(PhysicalPosition::new(rect.x, rect.y));
+        let _ = self
+            .window()
+            .set_size(PhysicalSize::new(rect.width, rect.height));
+
+        self.get_window_rect().await
+    }
 
     /// Maximize window
-    async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse>;
+    async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        let _ = self.window().maximize();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        self.get_window_rect().await
+    }
 
     /// Minimize window
-    async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
+        let _ = self.window().minimize();
+        Ok(())
+    }
 
     /// Set window to fullscreen
-    async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse>;
+    async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        let _ = self.window().set_fullscreen(true);
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        self.get_window_rect().await
+    }
 
     // =========================================================================
     // Frames

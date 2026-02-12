@@ -32,7 +32,7 @@ impl<R: Runtime + 'static> AppState<R> {
         &self,
         window_label: &str,
         timeouts: Timeouts,
-    ) -> Result<Arc<dyn PlatformExecutor>, WebDriverErrorResponse> {
+    ) -> Result<Arc<dyn PlatformExecutor<R>>, WebDriverErrorResponse> {
         self.app
             .webview_windows()
             .get(window_label)

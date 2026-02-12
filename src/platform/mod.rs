@@ -21,7 +21,7 @@ use crate::webdriver::Timeouts;
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
     timeouts: Timeouts,
-) -> Arc<dyn PlatformExecutor> {
+) -> Arc<dyn PlatformExecutor<R>> {
     Arc::new(macos::MacOSExecutor::new(window, timeouts))
 }
 
@@ -30,7 +30,7 @@ pub fn create_executor<R: Runtime + 'static>(
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
     timeouts: Timeouts,
-) -> Arc<dyn PlatformExecutor> {
+) -> Arc<dyn PlatformExecutor<R>> {
     Arc::new(windows::WindowsExecutor::new(window, timeouts))
 }
 
@@ -39,6 +39,6 @@ pub fn create_executor<R: Runtime + 'static>(
 pub fn create_executor<R: Runtime + 'static>(
     window: WebviewWindow<R>,
     timeouts: Timeouts,
-) -> Arc<dyn PlatformExecutor> {
+) -> Arc<dyn PlatformExecutor<R>> {
     Arc::new(linux::LinuxExecutor::new(window, timeouts))
 }
