@@ -88,10 +88,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
                 "value": value
             })),
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error(
-                "Channel closed",
-                None,
-            )),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }

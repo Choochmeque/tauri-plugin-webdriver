@@ -89,10 +89,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
                 "value": value
             })),
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::javascript_error(
-                "Channel closed",
-                None,
-            )),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }
@@ -150,24 +147,28 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // =========================================================================
 
     async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
+        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
         Err(WebDriverErrorResponse::unsupported_operation(
             "Alert handling not yet implemented for Linux",
         ))
     }
 
     async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
+        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
         Err(WebDriverErrorResponse::unsupported_operation(
             "Alert handling not yet implemented for Linux",
         ))
     }
 
     async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
+        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
         Err(WebDriverErrorResponse::unsupported_operation(
             "Alert handling not yet implemented for Linux",
         ))
     }
 
     async fn send_alert_text(&self, _text: &str) -> Result<(), WebDriverErrorResponse> {
+        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
         Err(WebDriverErrorResponse::unsupported_operation(
             "Alert handling not yet implemented for Linux",
         ))
@@ -178,6 +179,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // =========================================================================
 
     async fn print_page(&self, _options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
+        // TODO: Implement PDF printing using WebKitGTK's print operation
         Err(WebDriverErrorResponse::unsupported_operation(
             "PDF printing not yet implemented for Linux",
         ))
