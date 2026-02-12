@@ -35,8 +35,8 @@ describe('Navigation', () => {
       const title = await browser.getTitle();
       expect(title).toBeDefined();
       expect(typeof title).toBe('string');
-      // The Tauri app title should be "tauri-app" based on tauri.conf.json
-      expect(title).toBe('tauri-app');
+      // The Tauri app title is set in index.html
+      expect(title).toBe('Tauri + Svelte');
     });
   });
 

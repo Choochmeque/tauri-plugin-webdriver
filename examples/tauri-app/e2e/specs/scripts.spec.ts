@@ -44,7 +44,8 @@ describe('Script Execution', () => {
       const result = await browser.execute(() => {
         return undefined;
       });
-      expect(result).toBeUndefined();
+      // JSON serialization converts undefined to null (WebDriver spec behavior)
+      expect(result).toBeNull();
     });
 
     it('should execute script returning boolean', async () => {
@@ -59,7 +60,7 @@ describe('Script Execution', () => {
       const result = await browser.execute(() => {
         return document.title;
       });
-      expect(result).toBe('tauri-app');
+      expect(result).toBe('Tauri + Svelte');
     });
 
     it('should find elements in script', async () => {
