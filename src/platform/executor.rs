@@ -8,6 +8,7 @@ use crate::server::response::WebDriverErrorResponse;
 
 /// Tracks the state of modifier keys during action sequences
 #[derive(Debug, Clone, Copy, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ModifierState {
     pub ctrl: bool,
     pub shift: bool,
@@ -31,6 +32,7 @@ impl ModifierState {
 /// Platform-agnostic trait for `WebView` operations.
 /// Each platform (macOS, Windows, Linux) implements this trait.
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // =========================================================================
     // Window Access
@@ -231,7 +233,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Get element attribute value
-    /// Per W3C WebDriver spec, certain attributes should return current property values:
+    /// Per W3C `WebDriver` spec, certain attributes should return current property values:
     /// - "value" on input/textarea returns current value property
     /// - "checked" on checkbox/radio returns current checked state
     /// - "selected" on option returns current selected state
@@ -919,7 +921,9 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 } else {
                     key.to_string()
                 };
-                return self.dispatch_regular_key(key, &code, is_down, modifiers).await;
+                return self
+                    .dispatch_regular_key(key, &code, is_down, modifiers)
+                    .await;
             }
         };
 
@@ -1086,9 +1090,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let alt_key = modifiers.alt;
 
         // Check for Ctrl+A or Meta+A (select all)
-        let is_select_all = is_down
-            && (ch == 'a' || ch == 'A')
-            && (ctrl_key || meta_key);
+        let is_select_all = is_down && (ch == 'a' || ch == 'A') && (ctrl_key || meta_key);
 
         let script = if is_select_all {
             // Handle Ctrl+A / Meta+A: select all text

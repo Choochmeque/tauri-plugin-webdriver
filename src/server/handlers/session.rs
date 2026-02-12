@@ -100,10 +100,7 @@ pub async fn create<R: Runtime + 'static>(
 
     let (browser_name, browser_version) = match user_agent_result {
         Ok(result) => {
-            let user_agent = result
-                .get("value")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let user_agent = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
             parse_user_agent(user_agent)
         }
         Err(_) => ("webview".to_string(), "unknown".to_string()),
