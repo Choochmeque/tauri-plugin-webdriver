@@ -5,7 +5,7 @@ use axum::Json;
 use serde::Deserialize;
 use tauri::Runtime;
 
-use crate::platform::PointerEventType;
+use crate::platform::{ModifierState, PointerEventType};
 use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
 
@@ -117,6 +117,7 @@ pub async fn perform<R: Runtime + 'static>(
 
     let executor = state.get_executor_for_window(&current_window, timeouts)?;
     let mut pointer_state = PointerState { x: 0, y: 0 };
+    let mut modifier_state = ModifierState::default();
 
     for action_seq in &request.actions {
         match action_seq {
@@ -124,10 +125,16 @@ pub async fn perform<R: Runtime + 'static>(
                 for action in actions {
                     match action {
                         KeyAction::KeyDown { value } => {
-                            executor.dispatch_key_event(value, true).await?;
+                            modifier_state.update(value, true);
+                            executor
+                                .dispatch_key_event(value, true, &modifier_state)
+                                .await?;
                         }
                         KeyAction::KeyUp { value } => {
-                            executor.dispatch_key_event(value, false).await?;
+                            executor
+                                .dispatch_key_event(value, false, &modifier_state)
+                                .await?;
+                            modifier_state.update(value, false);
                         }
                         KeyAction::Pause { duration } => {
                             if let Some(ms) = duration {

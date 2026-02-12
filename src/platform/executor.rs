@@ -6,9 +6,33 @@ use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
 
+/// Tracks the state of modifier keys during action sequences
+#[derive(Debug, Clone, Copy, Default)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ModifierState {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+impl ModifierState {
+    /// Update modifier state when a key is pressed or released
+    pub fn update(&mut self, key: &str, is_down: bool) {
+        match key {
+            "\u{E009}" => self.ctrl = is_down,  // Control
+            "\u{E008}" => self.shift = is_down, // Shift
+            "\u{E00A}" => self.alt = is_down,   // Alt
+            "\u{E03D}" => self.meta = is_down,  // Meta
+            _ => {}
+        }
+    }
+}
+
 /// Platform-agnostic trait for `WebView` operations.
 /// Each platform (macOS, Windows, Linux) implements this trait.
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // =========================================================================
     // Window Access
@@ -209,6 +233,10 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Get element attribute value
+    /// Per W3C `WebDriver` spec, certain attributes should return current property values:
+    /// - "value" on input/textarea returns current value property
+    /// - "checked" on checkbox/radio returns current checked state
+    /// - "selected" on option returns current selected state
     async fn get_element_attribute(
         &self,
         js_var: &str,
@@ -221,6 +249,26 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
+                var attrName = '{escaped_name}'.toLowerCase();
+                var tagName = el.tagName.toLowerCase();
+
+                // Per W3C WebDriver spec, return property values for certain attributes
+                if (attrName === 'value') {{
+                    if (tagName === 'input' || tagName === 'textarea') {{
+                        return el.value;
+                    }}
+                }}
+                if (attrName === 'checked') {{
+                    if (tagName === 'input' && (el.type === 'checkbox' || el.type === 'radio')) {{
+                        return el.checked ? 'true' : null;
+                    }}
+                }}
+                if (attrName === 'selected') {{
+                    if (tagName === 'option') {{
+                        return el.selected ? 'true' : null;
+                    }}
+                }}
+
                 return el.getAttribute('{escaped_name}');
             }})()"
         );
@@ -369,6 +417,11 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 }}
                 el.scrollIntoView({{ block: 'center', inline: 'center' }});
                 el.click();
+                // Explicitly focus the element after click - programmatic click()
+                // doesn't always trigger focus like a real click would
+                if (typeof el.focus === 'function') {{
+                    el.focus();
+                }}
                 return true;
             }})()"
         );
@@ -484,7 +537,85 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
-                return el.computedRole || el.getAttribute('role') || '';
+
+                // Check for explicit role attribute first
+                var explicitRole = el.getAttribute('role');
+                if (explicitRole) return explicitRole;
+
+                // Try computedRole if available (Chrome/Edge)
+                if (el.computedRole) return el.computedRole;
+
+                // Compute implicit role based on element type
+                var tag = el.tagName.toLowerCase();
+                var type = el.type ? el.type.toLowerCase() : '';
+
+                // Map elements to their implicit ARIA roles
+                var roleMap = {{
+                    'a': el.hasAttribute('href') ? 'link' : 'generic',
+                    'article': 'article',
+                    'aside': 'complementary',
+                    'button': 'button',
+                    'datalist': 'listbox',
+                    'details': 'group',
+                    'dialog': 'dialog',
+                    'fieldset': 'group',
+                    'figure': 'figure',
+                    'footer': 'contentinfo',
+                    'form': 'form',
+                    'h1': 'heading',
+                    'h2': 'heading',
+                    'h3': 'heading',
+                    'h4': 'heading',
+                    'h5': 'heading',
+                    'h6': 'heading',
+                    'header': 'banner',
+                    'hr': 'separator',
+                    'img': el.getAttribute('alt') === '' ? 'presentation' : 'img',
+                    'li': 'listitem',
+                    'main': 'main',
+                    'menu': 'list',
+                    'meter': 'meter',
+                    'nav': 'navigation',
+                    'ol': 'list',
+                    'optgroup': 'group',
+                    'option': 'option',
+                    'output': 'status',
+                    'progress': 'progressbar',
+                    'section': 'region',
+                    'select': el.multiple ? 'listbox' : 'combobox',
+                    'summary': 'button',
+                    'table': 'table',
+                    'tbody': 'rowgroup',
+                    'td': 'cell',
+                    'textarea': 'textbox',
+                    'tfoot': 'rowgroup',
+                    'th': 'columnheader',
+                    'thead': 'rowgroup',
+                    'tr': 'row',
+                    'ul': 'list'
+                }};
+
+                // Handle input types
+                if (tag === 'input') {{
+                    var inputRoles = {{
+                        'button': 'button',
+                        'checkbox': 'checkbox',
+                        'email': 'textbox',
+                        'image': 'button',
+                        'number': 'spinbutton',
+                        'radio': 'radio',
+                        'range': 'slider',
+                        'reset': 'button',
+                        'search': 'searchbox',
+                        'submit': 'button',
+                        'tel': 'textbox',
+                        'text': 'textbox',
+                        'url': 'textbox'
+                    }};
+                    return inputRoles[type] || 'textbox';
+                }}
+
+                return roleMap[tag] || '';
             }})()"
         );
         let result = self.evaluate_js(&script).await?;
@@ -497,13 +628,69 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         js_var: &str,
     ) -> Result<String, WebDriverErrorResponse> {
         let script = format!(
-            r"(function() {{
+            r#"(function() {{
                 var el = window.{js_var};
                 if (!el || !document.contains(el)) {{
                     throw new Error('stale element reference');
                 }}
-                return el.computedName || el.getAttribute('aria-label') || el.innerText || '';
-            }})()"
+
+                // Try computedName if available (Chrome/Edge)
+                if (el.computedName) return el.computedName;
+
+                // Check aria-labelledby first (highest priority)
+                var labelledBy = el.getAttribute('aria-labelledby');
+                if (labelledBy) {{
+                    var labels = labelledBy.split(/\s+/).map(function(id) {{
+                        var labelEl = document.getElementById(id);
+                        return labelEl ? labelEl.textContent : '';
+                    }});
+                    var combined = labels.join(' ').trim();
+                    if (combined) return combined;
+                }}
+
+                // Check aria-label
+                var ariaLabel = el.getAttribute('aria-label');
+                if (ariaLabel) return ariaLabel;
+
+                // For inputs, check associated label
+                var tag = el.tagName.toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') {{
+                    // Check for label with 'for' attribute
+                    if (el.id) {{
+                        var label = document.querySelector("label[for='" + el.id + "']");
+                        if (label) return label.textContent.trim();
+                    }}
+                    // Check for wrapping label
+                    var parentLabel = el.closest('label');
+                    if (parentLabel) {{
+                        // Get label text excluding the input's value
+                        var clone = parentLabel.cloneNode(true);
+                        var inputs = clone.querySelectorAll('input, textarea, select');
+                        inputs.forEach(function(input) {{ input.remove(); }});
+                        var labelText = clone.textContent.trim();
+                        if (labelText) return labelText;
+                    }}
+                    // Check placeholder
+                    if (el.placeholder) return el.placeholder;
+                }}
+
+                // For buttons and links, use text content
+                if (tag === 'button' || tag === 'a') {{
+                    return el.textContent.trim();
+                }}
+
+                // For images, use alt text
+                if (tag === 'img') {{
+                    return el.getAttribute('alt') || '';
+                }}
+
+                // Check title attribute as last resort
+                var title = el.getAttribute('title');
+                if (title) return title;
+
+                // Fall back to text content for other elements
+                return el.textContent ? el.textContent.trim() : '';
+            }})()"#
         );
         let result = self.evaluate_js(&script).await?;
         extract_string_value(&result)
@@ -689,11 +876,12 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // Actions (Keyboard/Pointer)
     // =========================================================================
 
-    /// Dispatch a keyboard event
+    /// Dispatch a keyboard event with modifier state
     async fn dispatch_key_event(
         &self,
         key: &str,
         is_down: bool,
+        modifiers: &ModifierState,
     ) -> Result<(), WebDriverErrorResponse> {
         let (js_key, js_code, key_code) = match key {
             "\u{E007}" => ("Enter", "Enter", 13),
@@ -733,37 +921,161 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 } else {
                     key.to_string()
                 };
-                return self.dispatch_regular_key(key, &code, is_down).await;
+                return self
+                    .dispatch_regular_key(key, &code, is_down, modifiers)
+                    .await;
             }
         };
 
         let event_type = if is_down { "keydown" } else { "keyup" };
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{js_key}',
-                    code: '{js_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
+
+        // For special keys that modify input (Backspace, Delete), handle value changes
+        let script = if is_down && (js_key == "Backspace" || js_key == "Delete") {
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is an input or textarea, handle deletion
+                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            activeEl.tagName === 'INPUT'
+                                ? window.HTMLInputElement.prototype
+                                : window.HTMLTextAreaElement.prototype,
+                            'value'
+                        ).set;
+
+                        var currentValue = activeEl.value;
+                        var selStart = activeEl.selectionStart;
+                        var selEnd = activeEl.selectionEnd;
+                        var newValue;
+                        var inputType;
+
+                        // Check if there's a selection
+                        if (selStart !== selEnd) {{
+                            // Delete selection
+                            newValue = currentValue.slice(0, selStart) + currentValue.slice(selEnd);
+                            inputType = 'deleteContentBackward';
+                            // Set cursor position after deletion
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart, selStart);
+                        }} else if ('{js_key}' === 'Backspace' && selStart > 0) {{
+                            newValue = currentValue.slice(0, selStart - 1) + currentValue.slice(selStart);
+                            inputType = 'deleteContentBackward';
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart - 1, selStart - 1);
+                        }} else if ('{js_key}' === 'Delete' && selStart < currentValue.length) {{
+                            newValue = currentValue.slice(0, selStart) + currentValue.slice(selStart + 1);
+                            inputType = 'deleteContentForward';
+                            nativeInputValueSetter.call(activeEl, newValue);
+                            activeEl.setSelectionRange(selStart, selStart);
+                        }} else {{
+                            return true; // Nothing to delete
+                        }}
+
+                        // Dispatch input event
+                        var inputEvent = new InputEvent('input', {{
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: inputType
+                        }});
+                        activeEl.dispatchEvent(inputEvent);
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else if is_down
+            && (js_key == "ArrowDown"
+                || js_key == "ArrowUp"
+                || js_key == "ArrowLeft"
+                || js_key == "ArrowRight")
+        {
+            // Handle arrow keys on radio buttons for navigation
+            let go_forward = js_key == "ArrowDown" || js_key == "ArrowRight";
+            format!(
+                r#"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event first
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is a radio button, handle navigation
+                    if (activeEl.tagName === 'INPUT' && activeEl.type === 'radio' && activeEl.name) {{
+                        var name = activeEl.name;
+                        var radios = Array.from(document.querySelectorAll("input[type='radio'][name='" + name + "']"));
+                        var currentIndex = radios.indexOf(activeEl);
+
+                        if (currentIndex !== -1 && radios.length > 1) {{
+                            var nextIndex;
+                            if ({go_forward}) {{
+                                // ArrowDown/ArrowRight - go to next
+                                nextIndex = (currentIndex + 1) % radios.length;
+                            }} else {{
+                                // ArrowUp/ArrowLeft - go to previous
+                                nextIndex = (currentIndex - 1 + radios.length) % radios.length;
+                            }}
+
+                            var nextRadio = radios[nextIndex];
+                            nextRadio.checked = true;
+                            nextRadio.focus();
+
+                            // Dispatch change event
+                            var changeEvent = new Event('change', {{ bubbles: true }});
+                            nextRadio.dispatchEvent(changeEvent);
+                        }}
+                    }}
+
+                    return true;
+                }})()"#
+            )
+        } else {
+            format!(
+                r"(function() {{
+                    var event = new KeyboardEvent('{event_type}', {{
+                        key: '{js_key}',
+                        code: '{js_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    var activeEl = document.activeElement || document.body;
+                    activeEl.dispatchEvent(event);
+                    return true;
+                }})()"
+            )
+        };
 
         self.evaluate_js(&script).await?;
         Ok(())
     }
 
-    /// Dispatch a regular (non-special) key event
+    /// Dispatch a regular (non-special) key event with modifier state
     async fn dispatch_regular_key(
         &self,
         key: &str,
         code: &str,
         is_down: bool,
+        modifiers: &ModifierState,
     ) -> Result<(), WebDriverErrorResponse> {
         let ch = key.chars().next().unwrap_or(' ');
         let key_code = ch as u32;
@@ -772,21 +1084,115 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let escaped_key = key.replace('\\', "\\\\").replace('\'', "\\'");
         let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
 
-        let script = format!(
-            r"(function() {{
-                var event = new KeyboardEvent('{event_type}', {{
-                    key: '{escaped_key}',
-                    code: '{escaped_code}',
-                    keyCode: {key_code},
-                    which: {key_code},
-                    bubbles: true,
-                    cancelable: true
-                }});
-                var activeEl = document.activeElement || document.body;
-                activeEl.dispatchEvent(event);
-                return true;
-            }})()"
-        );
+        let ctrl_key = modifiers.ctrl;
+        let meta_key = modifiers.meta;
+        let shift_key = modifiers.shift;
+        let alt_key = modifiers.alt;
+
+        // Check for Ctrl+A or Meta+A (select all)
+        let is_select_all = is_down && (ch == 'a' || ch == 'A') && (ctrl_key || meta_key);
+
+        let script = if is_select_all {
+            // Handle Ctrl+A / Meta+A: select all text
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event with modifiers
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // Select all text in input/textarea
+                    if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                        activeEl.select();
+                    }} else {{
+                        document.execCommand('selectAll', false, null);
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else if is_down {
+            // For keydown events on printable characters, update input value
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+
+                    // Dispatch keydown event with modifiers
+                    var keydownEvent = new KeyboardEvent('keydown', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(keydownEvent);
+
+                    // If active element is an input or textarea, update value and dispatch input event
+                    // Only do this for non-modifier key combos
+                    if (!{ctrl_key} && !{meta_key} && !{alt_key}) {{
+                        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {{
+                            var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                                activeEl.tagName === 'INPUT'
+                                    ? window.HTMLInputElement.prototype
+                                    : window.HTMLTextAreaElement.prototype,
+                                'value'
+                            ).set;
+
+                            var newValue = activeEl.value + '{escaped_key}';
+                            nativeInputValueSetter.call(activeEl, newValue);
+
+                            // Dispatch input event
+                            var inputEvent = new InputEvent('input', {{
+                                bubbles: true,
+                                cancelable: true,
+                                inputType: 'insertText',
+                                data: '{escaped_key}'
+                            }});
+                            activeEl.dispatchEvent(inputEvent);
+                        }}
+                    }}
+
+                    return true;
+                }})()"
+            )
+        } else {
+            format!(
+                r"(function() {{
+                    var activeEl = document.activeElement || document.body;
+                    var event = new KeyboardEvent('{event_type}', {{
+                        key: '{escaped_key}',
+                        code: '{escaped_code}',
+                        keyCode: {key_code},
+                        which: {key_code},
+                        ctrlKey: {ctrl_key},
+                        metaKey: {meta_key},
+                        shiftKey: {shift_key},
+                        altKey: {alt_key},
+                        bubbles: true,
+                        cancelable: true
+                    }});
+                    activeEl.dispatchEvent(event);
+                    return true;
+                }})()"
+            )
+        };
 
         self.evaluate_js(&script).await?;
         Ok(())
