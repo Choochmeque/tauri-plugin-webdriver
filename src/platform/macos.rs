@@ -5,6 +5,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
 use block2::RcBlock;
 use objc2::runtime::AnyObject;
+use objc2::MainThreadMarker;
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
 use objc2_foundation::{NSData, NSDictionary, NSError, NSString};
 use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
@@ -102,7 +103,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
 
         let result = self.window.with_webview(move |webview| unsafe {
             let wk_webview: &WKWebView = &*webview.inner().cast();
-            let config = WKSnapshotConfiguration::new();
+            let mtm = MainThreadMarker::new_unchecked();
+            let config = WKSnapshotConfiguration::new(mtm);
 
             let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
             let block = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
@@ -174,7 +176,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
         let result = self.window.with_webview(move |webview| {
             unsafe {
                 let wk_webview: &WKWebView = &*webview.inner().cast();
-                let config = WKSnapshotConfiguration::new();
+                let mtm = MainThreadMarker::new_unchecked();
+                let config = WKSnapshotConfiguration::new(mtm);
 
                 // Set clip rect for element
                 // Note: WKSnapshotConfiguration has afterScreenUpdates and rect properties
@@ -278,8 +281,8 @@ unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
         bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict);
     let png_data = png_data.ok_or("Failed to convert to PNG")?;
 
-    let bytes = png_data.bytes();
-    Ok(BASE64_STANDARD.encode(bytes))
+    let bytes = png_data.to_vec();
+    Ok(BASE64_STANDARD.encode(&bytes))
 }
 
 /// Convert an `NSObject` to a JSON value
@@ -287,7 +290,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     use objc2_foundation::NSString as NSStr;
 
     let class = obj.class();
-    let class_name = class.name();
+    let class_name = class.name().to_str().unwrap_or("");
 
     if class_name.contains("String") {
         let ns_str: &NSStr = &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSStr>();
@@ -346,7 +349,7 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
                 continue;
             }
 
-            let key_class = (&*key).class().name();
+            let key_class = (&*key).class().name().to_str().unwrap_or("");
             if !key_class.contains("String") {
                 continue;
             }
