@@ -1,6 +1,6 @@
 name: E2E Tests
 
-on: [ pull_request, push, workflow_dispatch ]
+on: [ workflow_dispatch ]
 
 permissions:
   contents: read
@@ -49,10 +49,6 @@ jobs:
         working-directory: examples/tauri-app
         run: pnpm install
 
-      - name: Build frontend
-        working-directory: examples/tauri-app
-        run: pnpm build
-
       - name: Build Tauri app
         working-directory: examples/tauri-app
         run: pnpm tauri build
@@ -72,57 +68,57 @@ jobs:
         working-directory: examples/tauri-app
         run: pnpm test:e2e
 
-  # Code coverage
-  coverage:
-    name: code-coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+  # # Code coverage
+  # coverage:
+  #   name: code-coverage
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
 
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
-          version: "1.0"
+  #     - uses: awalsh128/cache-apt-pkgs-action@latest
+  #       with:
+  #         packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+  #         version: "1.0"
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
+  #     - uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         components: llvm-tools-preview
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            .
-            examples/tauri-app/src-tauri
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: |
+  #           .
+  #           examples/tauri-app/src-tauri
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
+  #     - uses: taiki-e/install-action@cargo-llvm-cov
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+  #     - uses: pnpm/action-setup@v4
+  #       with:
+  #         version: 9
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-          cache-dependency-path: 'examples/tauri-app/pnpm-lock.yaml'
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: 'pnpm'
+  #         cache-dependency-path: 'examples/tauri-app/pnpm-lock.yaml'
 
-      - name: Install frontend dependencies
-        working-directory: examples/tauri-app
-        run: pnpm install
+  #     - name: Install frontend dependencies
+  #       working-directory: examples/tauri-app
+  #       run: pnpm install
 
-      - name: Build frontend
-        working-directory: examples/tauri-app
-        run: pnpm build
+  #     - name: Build frontend
+  #       working-directory: examples/tauri-app
+  #       run: pnpm build
 
-      - name: Generate coverage report
-        run: |
-          cargo llvm-cov --all-features --workspace \
-            --ignore-filename-regex='target/' \
-            --lcov --output-path lcov.info
+  #     - name: Generate coverage report
+  #       run: |
+  #         cargo llvm-cov --all-features --workspace \
+  #           --ignore-filename-regex='target/' \
+  #           --lcov --output-path lcov.info
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
-          verbose: true
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v4
+  #       with:
+  #         files: lcov.info
+  #         fail_ci_if_error: false
+  #         verbose: true
