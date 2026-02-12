@@ -8,6 +8,7 @@ use tauri::Runtime;
 
 use crate::server::response::{WebDriverErrorResponse, WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
+use crate::webdriver::Timeouts;
 
 /// Wait for a window to become available, polling with timeout
 async fn wait_for_window<R: Runtime>(
@@ -46,13 +47,67 @@ pub struct SessionResponse {
     pub capabilities: Value,
 }
 
+/// Parse user agent to extract browser name and version
+fn parse_user_agent(user_agent: &str) -> (String, String) {
+    // Windows WebView2: "... Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+    if user_agent.contains("Edg/") {
+        let version = user_agent
+            .split("Edg/")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .unwrap_or("unknown");
+        return ("msedge".to_string(), version.to_string());
+    }
+
+    // Linux WebKitGTK: "... (X11; Linux ...) AppleWebKit/... Version/2.44..."
+    if user_agent.contains("Linux") || user_agent.contains("X11") {
+        let version = user_agent
+            .split("AppleWebKit/")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .unwrap_or("unknown");
+        return ("WebKitGTK".to_string(), version.to_string());
+    }
+
+    // macOS WebKit/WKWebView: "... (Macintosh; ...) AppleWebKit/605.1.15 ..."
+    // Note: WKWebView may not include "Safari/" or "Version/"
+    if user_agent.contains("Macintosh") && user_agent.contains("AppleWebKit/") {
+        let version = user_agent
+            .split("AppleWebKit/")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .and_then(|s| s.split('(').next()) // Remove trailing (KHTML if present
+            .unwrap_or("unknown");
+        return ("webkit".to_string(), version.to_string());
+    }
+
+    ("webview".to_string(), "unknown".to_string())
+}
+
 /// POST `/session` - Create a new session
-pub async fn create<R: Runtime>(
+pub async fn create<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Json(_request): Json<CreateSessionRequest>,
 ) -> WebDriverResult {
     // Wait for a window to become available (up to 10 seconds)
     let initial_window = wait_for_window(&state, 10_000).await?;
+
+    // Query the webview for its user agent to get browser info
+    let executor = state.get_executor_for_window(&initial_window, Timeouts::default())?;
+    let user_agent_result = executor
+        .evaluate_js("(function() { return navigator.userAgent; })()")
+        .await;
+
+    let (browser_name, browser_version) = match user_agent_result {
+        Ok(result) => {
+            let user_agent = result
+                .get("value")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            parse_user_agent(user_agent)
+        }
+        Err(_) => ("webview".to_string(), "unknown".to_string()),
+    };
 
     let mut sessions = state.sessions.write().await;
 
@@ -62,11 +117,12 @@ pub async fn create<R: Runtime>(
     let response = SessionResponse {
         session_id: session.id.clone(),
         capabilities: json!({
-            "browserName": "tauri",
-            "browserVersion": "2.0",
+            "browserName": browser_name,
+            "browserVersion": browser_version,
             "platformName": std::env::consts::OS,
             "acceptInsecureCerts": false,
             "pageLoadStrategy": "normal",
+            "setWindowRect": true,
             "timeouts": {
                 "implicit": session.timeouts.implicit_ms,
                 "pageLoad": session.timeouts.page_load_ms,
