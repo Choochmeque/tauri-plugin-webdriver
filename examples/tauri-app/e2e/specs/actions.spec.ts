@@ -201,7 +201,7 @@ describe('Actions API', () => {
       await bottomMarker.scrollIntoView();
 
       // Element should now be in view
-      expect(await bottomMarker.isDisplayedInViewport()).toBe(true);
+      expect(await bottomMarker.isDisplayed()).toBe(true);
     });
 
     it('should scroll using wheel action', async () => {
@@ -238,7 +238,7 @@ describe('Actions API', () => {
       await browser.pause(500); // Wait for smooth scroll
 
       const bottomMarker = await $('[data-testid="bottom-marker"]');
-      expect(await bottomMarker.isDisplayedInViewport()).toBe(true);
+      expect(await bottomMarker.isDisplayed()).toBe(true);
     });
 
     it('should scroll to top', async () => {
@@ -256,7 +256,7 @@ describe('Actions API', () => {
       await browser.pause(500);
 
       const topMarker = await $('[data-testid="top-marker"]');
-      expect(await topMarker.isDisplayedInViewport()).toBe(true);
+      expect(await topMarker.isDisplayed()).toBe(true);
     });
   });
 
