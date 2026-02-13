@@ -10,9 +10,11 @@ use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
 use objc2_foundation::{NSData, NSDictionary, NSError, NSString};
 use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
 use serde_json::Value;
-use tauri::{Runtime, WebviewWindow};
+use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
+use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
+use crate::platform::macos_handler::register_handler;
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -100,6 +102,103 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
             Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        }
+    }
+
+    // =========================================================================
+    // Async Script Execution (Native Handler)
+    // =========================================================================
+
+    async fn execute_async_script(
+        &self,
+        script: &str,
+        args: &[Value],
+    ) -> Result<Value, WebDriverErrorResponse> {
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
+
+        let async_id = uuid::Uuid::new_v4().to_string();
+
+        // Get async state from Tauri's managed state
+        let app = self.window.app_handle().clone();
+        let async_state = app.state::<AsyncScriptState>();
+
+        // Register native message handler if not already registered for this window
+        let label = self.window.label();
+        if !async_state.mark_handler_registered(label) {
+            let app_clone = app.clone();
+            let handler_result = self.window.with_webview(move |webview| unsafe {
+                let wk_webview: &WKWebView = &*webview.inner().cast();
+                let state = app_clone.state::<AsyncScriptState>();
+                register_handler(wk_webview, state.inner());
+            });
+
+            if let Err(e) = handler_result {
+                return Err(WebDriverErrorResponse::unknown_error(&format!(
+                    "Failed to register message handler: {e}"
+                )));
+            }
+        }
+
+        // Register pending operation
+        let rx = async_state.register(async_id.clone());
+
+        // Build wrapper with native postMessage
+        let wrapper = format!(
+            r#"(function() {{
+                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                function deserializeArg(arg) {{
+                    if (arg === null || arg === undefined) return arg;
+                    if (Array.isArray(arg)) return arg.map(deserializeArg);
+                    if (typeof arg === 'object') {{
+                        if (arg[ELEMENT_KEY]) {{
+                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                            if (!el) throw new Error('stale element reference');
+                            return el;
+                        }}
+                        var result = {{}};
+                        for (var key in arg) {{
+                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                        }}
+                        return result;
+                    }}
+                    return arg;
+                }}
+                var __done = function(r) {{
+                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
+                        id: '{async_id}',
+                        result: r,
+                        error: null
+                    }});
+                }};
+                var __args = {args_json}.map(deserializeArg);
+                __args.push(__done);
+                try {{
+                    (function() {{ {script} }}).apply(null, __args);
+                }} catch (e) {{
+                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
+                        id: '{async_id}',
+                        result: null,
+                        error: e.message || String(e)
+                    }});
+                }}
+            }})()"#
+        );
+
+        // Execute the wrapper (returns immediately)
+        self.evaluate_js(&wrapper).await?;
+
+        // Wait for result with timeout
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(value))) => Ok(value),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => {
+                async_state.cancel(&async_id);
+                Err(WebDriverErrorResponse::script_timeout())
+            }
         }
     }
 
@@ -295,7 +394,7 @@ unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
 }
 
 /// Convert an `NSObject` to a JSON value
-unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
+pub(super) unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     use objc2_foundation::NSString as NSStr;
 
     let class = obj.class();

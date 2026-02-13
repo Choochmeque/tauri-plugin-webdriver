@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::Write;
-use tauri::{Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
+use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -823,82 +823,12 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
 
     /// Execute asynchronous JavaScript with callback.
     ///
-    /// Uses Tauri IPC to receive the callback result since webview `evaluateJavaScript`
-    /// APIs don't await JavaScript Promises.
+    /// Each platform must implement this using native message handlers.
     async fn execute_async_script(
         &self,
         script: &str,
         args: &[Value],
-    ) -> Result<Value, WebDriverErrorResponse> {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
-
-        let async_id = uuid::Uuid::new_v4().to_string();
-
-        // Get async state and register this operation
-        let app = self.window().app_handle();
-        let async_state = app.state::<crate::AsyncScriptState>();
-        let rx = async_state.register(async_id.clone());
-
-        // Build wrapper with inline Tauri invoke
-        let wrapper = format!(
-            r#"(function() {{
-                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-                function deserializeArg(arg) {{
-                    if (arg === null || arg === undefined) return arg;
-                    if (Array.isArray(arg)) return arg.map(deserializeArg);
-                    if (typeof arg === 'object') {{
-                        if (arg[ELEMENT_KEY]) {{
-                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
-                            if (!el) throw new Error('stale element reference');
-                            return el;
-                        }}
-                        var result = {{}};
-                        for (var key in arg) {{
-                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
-                        }}
-                        return result;
-                    }}
-                    return arg;
-                }}
-                var __done = function(r) {{
-                    window.__TAURI_INTERNALS__.invoke('plugin:webdriver|resolve', {{
-                        id: '{async_id}',
-                        result: r,
-                        error: null
-                    }});
-                }};
-                var __args = {args_json}.map(deserializeArg);
-                __args.push(__done);
-                try {{
-                    (function() {{ {script} }}).apply(null, __args);
-                }} catch (e) {{
-                    window.__TAURI_INTERNALS__.invoke('plugin:webdriver|resolve', {{
-                        id: '{async_id}',
-                        result: null,
-                        error: e.message || String(e)
-                    }});
-                }}
-            }})()"#
-        );
-
-        // Execute the wrapper (returns immediately, doesn't wait for callback)
-        self.evaluate_js(&wrapper).await?;
-
-        // Wait for result with timeout
-        let timeout_ms = self.timeouts().script_ms;
-        let timeout = std::time::Duration::from_millis(timeout_ms);
-
-        match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(Ok(value))) => Ok(value),
-            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
-            Err(_) => {
-                async_state.cancel(&async_id);
-                Err(WebDriverErrorResponse::script_timeout())
-            }
-        }
-    }
+    ) -> Result<Value, WebDriverErrorResponse>;
 
     // =========================================================================
     // Screenshots
