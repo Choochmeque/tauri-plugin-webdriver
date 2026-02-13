@@ -494,9 +494,15 @@ mod handlers {
                 }
                 let message_str = message_ptr.to_string().unwrap_or_default();
 
-                // Parse the JSON message
-                let parsed: Result<Value, _> = serde_json::from_str(&message_str);
-                let msg = match parsed {
+                // WebMessageAsJson returns the message as a JSON value.
+                // Since JS sends JSON.stringify({...}), the message is a string,
+                // so we get a JSON-encoded string (with extra quotes).
+                // First parse to get the inner string, then parse that as our object.
+                let inner_str: String = match serde_json::from_str(&message_str) {
+                    Ok(s) => s,
+                    Err(_) => return Ok(()), // Not a JSON string
+                };
+                let msg: Value = match serde_json::from_str(&inner_str) {
                     Ok(v) => v,
                     Err(_) => return Ok(()), // Not our message format
                 };
