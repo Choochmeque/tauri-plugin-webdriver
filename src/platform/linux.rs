@@ -195,6 +195,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // Async Script Execution
     // =========================================================================
 
+    #[allow(clippy::too_many_lines)]
     async fn execute_async_script(
         &self,
         script: &str,
@@ -283,7 +284,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
 
         // Build wrapper with native postMessage (WebKitGTK uses same API as macOS WebKit)
         let wrapper = format!(
-            r#"(function() {{
+            r"(function() {{
                 var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
                 function deserializeArg(arg) {{
                     if (arg === null || arg === undefined) return arg;
@@ -320,7 +321,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
                         error: e.message || String(e)
                     }});
                 }}
-            }})()"#
+            }})()"
         );
 
         // Execute the wrapper (returns immediately)
