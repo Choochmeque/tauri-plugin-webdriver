@@ -66,3 +66,10 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     macos::register_webview_handlers(webview);
 }
+
+/// Register platform-specific webview handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook.
+#[cfg(target_os = "linux")]
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    linux::register_webview_handlers(webview);
+}
