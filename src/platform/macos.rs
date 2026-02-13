@@ -41,7 +41,7 @@ impl<R: Runtime> MacOSExecutor<R> {
     }
 }
 
-/// Register WKWebView handlers at webview creation time.
+/// Register `WKWebView` handlers at webview creation time.
 /// This is called from the plugin's `on_webview_ready` hook to ensure
 /// the UI delegate is registered before any navigation completes.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {

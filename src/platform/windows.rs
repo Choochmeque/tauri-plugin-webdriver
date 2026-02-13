@@ -5,10 +5,8 @@ use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2Deferral, ICoreWebView2ExecuteScriptCompletedHandler,
-    ICoreWebView2ScriptDialogOpeningEventArgs, ICoreWebView2ScriptDialogOpeningEventHandler,
-    ICoreWebView2WebMessageReceivedEventHandler, COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT,
-    COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM, COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT,
+    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2ScriptDialogOpeningEventHandler, ICoreWebView2WebMessageReceivedEventHandler,
 };
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
@@ -48,7 +46,7 @@ impl<R: Runtime> WindowsExecutor<R> {
     }
 }
 
-/// Register WebView2 handlers at webview creation time.
+/// Register `WebView2` handlers at webview creation time.
 /// This is called from the plugin's `on_webview_ready` hook to ensure
 /// the script dialog handler is registered before any navigation completes.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
@@ -589,13 +587,20 @@ mod handlers {
         }
     }
 
+    impl Default for ScriptDialogOpeningHandler {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl ICoreWebView2ScriptDialogOpeningEventHandler_Impl for ScriptDialogOpeningHandler_Impl {
         fn Invoke(
             &self,
             _sender: windows::core::Ref<'_, ICoreWebView2>,
             args: windows::core::Ref<'_, ICoreWebView2ScriptDialogOpeningEventArgs>,
         ) -> windows::core::Result<()> {
-            unsafe {
+            // Extract data and prepare for async handling inside unsafe block
+            let (args_ptr, deferral_ptr, rx) = unsafe {
                 let Some(args) = args.clone() else {
                     return Ok(());
                 };
@@ -666,46 +671,48 @@ mod handlers {
                 let args_ptr = SendableComPtr(args.into_raw());
                 let deferral_ptr = SendableComPtr(deferral.into_raw());
 
-                // Spawn thread to wait for WebDriver response (don't block UI thread)
-                std::thread::spawn(move || {
-                    let timeout = std::time::Duration::from_secs(30);
-                    let response = rx.recv_timeout(timeout);
+                (args_ptr, deferral_ptr, rx)
+            };
 
-                    // Reconstruct COM objects from raw pointers
-                    // SAFETY: These pointers came from valid COM objects and we're
-                    // accessing them from a single thread
-                    let args = unsafe {
-                        ICoreWebView2ScriptDialogOpeningEventArgs::from_raw(args_ptr.as_ptr())
-                    };
-                    let deferral =
-                        unsafe { ICoreWebView2Deferral::from_raw(deferral_ptr.as_ptr()) };
+            // Spawn thread to wait for WebDriver response (don't block UI thread)
+            // This is outside the unsafe block so inner unsafe blocks are not nested
+            std::thread::spawn(move || {
+                let timeout = std::time::Duration::from_secs(30);
+                let response = rx.recv_timeout(timeout);
 
-                    match response {
-                        Ok(AlertResponse {
-                            accepted,
-                            prompt_text,
-                        }) => {
-                            if accepted {
-                                // Set prompt text if provided
-                                if let Some(text) = prompt_text {
-                                    let result = windows::core::HSTRING::from(text.as_str());
-                                    let _ =
-                                        args.SetResultText(windows::core::PCWSTR(result.as_ptr()));
-                                }
-                                let _ = args.Accept();
+                // Reconstruct COM objects from raw pointers
+                // SAFETY: These pointers came from valid COM objects and we're
+                // accessing them from a single thread
+                let args = unsafe {
+                    ICoreWebView2ScriptDialogOpeningEventArgs::from_raw(args_ptr.as_ptr())
+                };
+                let deferral = unsafe { ICoreWebView2Deferral::from_raw(deferral_ptr.as_ptr()) };
+
+                match response {
+                    Ok(AlertResponse {
+                        accepted,
+                        prompt_text,
+                    }) => {
+                        if accepted {
+                            // Set prompt text if provided
+                            if let Some(text) = prompt_text {
+                                let result = windows::core::HSTRING::from(text.as_str());
+                                let _ = args.SetResultText(windows::core::PCWSTR(result.as_ptr()));
                             }
-                            // If not accepted, don't call Accept() - dialog returns false/null
-                        }
-                        Err(_) => {
-                            // Timeout - auto-accept
                             let _ = args.Accept();
                         }
+                        // If not accepted, don't call Accept() - dialog returns false/null
                     }
+                    Err(_) => {
+                        // Timeout - auto-accept
+                        let _ = args.Accept();
+                    }
+                }
 
-                    // Complete the deferral to let WebView2 continue
-                    let _ = deferral.Complete();
-                });
-            }
+                // Complete the deferral to let WebView2 continue
+                let _ = deferral.Complete();
+            });
+
             Ok(())
         }
     }
