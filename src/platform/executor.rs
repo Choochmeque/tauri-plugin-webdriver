@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt::Write;
+use tauri::webview::Cookie as TauriCookie;
 use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
@@ -1344,41 +1344,15 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     // =========================================================================
-    // Cookies
+    // Cookies (using Tauri's native cookie APIs)
     // =========================================================================
 
     /// Get all cookies
     async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
-        let script = r"(function() {
-            var cookies = document.cookie.split(';');
-            var result = [];
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].trim();
-                if (cookie) {
-                    var eqIndex = cookie.indexOf('=');
-                    if (eqIndex > 0) {
-                        result.push({
-                            name: cookie.substring(0, eqIndex),
-                            value: cookie.substring(eqIndex + 1)
-                        });
-                    }
-                }
-            }
-            return result;
-        })()";
-
-        let result = self.evaluate_js(script).await?;
-
-        if let Some(value) = result.get("value") {
-            if let Some(arr) = value.as_array() {
-                let cookies: Vec<Cookie> = arr
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect();
-                return Ok(cookies);
-            }
-        }
-        Ok(vec![])
+        self.window()
+            .cookies()
+            .map(|cookies| cookies.iter().map(tauri_cookie_to_webdriver).collect())
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))
     }
 
     /// Get a specific cookie by name
@@ -1388,49 +1362,55 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Add a cookie
-    async fn add_cookie(&self, cookie: Cookie) -> Result<(), WebDriverErrorResponse> {
-        let mut cookie_str = format!("{}={}", cookie.name, cookie.value);
-
-        if let Some(path) = &cookie.path {
-            let _ = write!(cookie_str, "; path={path}");
-        }
-        if let Some(domain) = &cookie.domain {
-            let _ = write!(cookie_str, "; domain={domain}");
-        }
-        if cookie.secure {
-            cookie_str.push_str("; secure");
-        }
-        if cookie.http_only {
-            cookie_str.push_str("; httponly");
-        }
-        if let Some(expiry) = cookie.expiry {
-            let _ = write!(cookie_str, "; expires={expiry}");
-        }
-        if let Some(same_site) = &cookie.same_site {
-            let _ = write!(cookie_str, "; samesite={same_site}");
+    async fn add_cookie(&self, mut cookie: Cookie) -> Result<(), WebDriverErrorResponse> {
+        // Per WebDriver spec: if no domain is specified, use the current page's domain
+        if cookie.domain.is_none() {
+            if let Ok(url) = self.window().url() {
+                cookie.domain = url.host_str().map(String::from);
+            }
         }
 
-        let escaped = cookie_str.replace('\'', "\\'");
-        let script = format!(r"document.cookie = '{escaped}'; true");
-        self.evaluate_js(&script).await?;
-        Ok(())
+        // Default path to "/" if not specified
+        if cookie.path.is_none() {
+            cookie.path = Some("/".to_string());
+        }
+
+        let tauri_cookie = webdriver_cookie_to_tauri(&cookie);
+        self.window()
+            .set_cookie(tauri_cookie)
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))
     }
 
     /// Delete a cookie by name
     async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
-        let script = format!(
-            r"document.cookie = '{}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; true",
-            name.replace('\'', "\\'")
-        );
-        self.evaluate_js(&script).await?;
+        // Find the cookie first to get its exact domain/path for deletion
+        let cookies = self
+            .window()
+            .cookies()
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
+        for cookie in cookies {
+            if cookie.name() == name {
+                self.window()
+                    .delete_cookie(cookie)
+                    .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+                return Ok(());
+            }
+        }
         Ok(())
     }
 
     /// Delete all cookies
     async fn delete_all_cookies(&self) -> Result<(), WebDriverErrorResponse> {
-        let cookies = self.get_all_cookies().await?;
+        let cookies = self
+            .window()
+            .cookies()
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
         for cookie in cookies {
-            self.delete_cookie(&cookie.name).await?;
+            self.window()
+                .delete_cookie(cookie)
+                .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
         }
         Ok(())
     }
@@ -1706,4 +1686,71 @@ pub fn wrap_script_for_frame_context(script: &str, frame_context: &[FrameId]) ->
     frame_nav.push_str("})()");
 
     frame_nav
+}
+
+// =============================================================================
+// Cookie Conversion Functions
+// =============================================================================
+
+/// Convert Tauri cookie to `WebDriver` cookie
+fn tauri_cookie_to_webdriver(cookie: &TauriCookie<'static>) -> Cookie {
+    use tauri::webview::cookie::{Expiration, SameSite};
+
+    Cookie {
+        name: cookie.name().to_string(),
+        value: cookie.value().to_string(),
+        path: cookie.path().map(String::from),
+        domain: cookie.domain().map(String::from),
+        secure: cookie.secure().unwrap_or(false),
+        http_only: cookie.http_only().unwrap_or(false),
+        expiry: cookie.expires().and_then(|exp| match exp {
+            Expiration::DateTime(dt) => Some(dt.unix_timestamp().cast_unsigned()),
+            Expiration::Session => None,
+        }),
+        same_site: cookie.same_site().map(|ss| match ss {
+            SameSite::Strict => "Strict".to_string(),
+            SameSite::Lax => "Lax".to_string(),
+            SameSite::None => "None".to_string(),
+        }),
+    }
+}
+
+/// Convert `WebDriver` cookie to Tauri cookie
+fn webdriver_cookie_to_tauri(cookie: &Cookie) -> TauriCookie<'static> {
+    use tauri::webview::cookie::{time::OffsetDateTime, Expiration, SameSite};
+
+    let mut builder = TauriCookie::build((cookie.name.clone(), cookie.value.clone()));
+
+    if let Some(ref path) = cookie.path {
+        builder = builder.path(path.clone());
+    }
+
+    if let Some(ref domain) = cookie.domain {
+        builder = builder.domain(domain.clone());
+    }
+
+    if cookie.secure {
+        builder = builder.secure(true);
+    }
+
+    if cookie.http_only {
+        builder = builder.http_only(true);
+    }
+
+    if let Some(expiry) = cookie.expiry {
+        if let Ok(dt) = OffsetDateTime::from_unix_timestamp(expiry.cast_signed()) {
+            builder = builder.expires(Expiration::DateTime(dt));
+        }
+    }
+
+    if let Some(ref same_site) = cookie.same_site {
+        let ss = match same_site.to_lowercase().as_str() {
+            "strict" => SameSite::Strict,
+            "lax" => SameSite::Lax,
+            _ => SameSite::None,
+        };
+        builder = builder.same_site(ss);
+    }
+
+    builder.build()
 }
