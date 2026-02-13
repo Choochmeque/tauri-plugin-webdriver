@@ -8,7 +8,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ExecuteScriptCom
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
-use crate::platform::{PlatformExecutor, PrintOptions};
+use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
 
@@ -17,11 +17,16 @@ use crate::webdriver::Timeouts;
 pub struct WindowsExecutor<R: Runtime> {
     window: WebviewWindow<R>,
     timeouts: Timeouts,
+    frame_context: Vec<FrameId>,
 }
 
 impl<R: Runtime> WindowsExecutor<R> {
-    pub fn new(window: WebviewWindow<R>, timeouts: Timeouts) -> Self {
-        Self { window, timeouts }
+    pub fn new(window: WebviewWindow<R>, timeouts: Timeouts, frame_context: Vec<FrameId>) -> Self {
+        Self {
+            window,
+            timeouts,
+            frame_context,
+        }
     }
 }
 
@@ -41,7 +46,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
 
     async fn evaluate_js(&self, script: &str) -> Result<Value, WebDriverErrorResponse> {
         let (tx, rx) = oneshot::channel();
-        let script_owned = script.to_string();
+        let script_owned = wrap_script_for_frame_context(script, &self.frame_context);
 
         let result = self.window.with_webview(move |webview| unsafe {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
