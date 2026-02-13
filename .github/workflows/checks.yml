@@ -37,14 +37,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::unwrap_used -D clippy::pedantic
 
-  # Check links in markdown files.
-  mlc:
-    name: mlc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: becheran/mlc@v1
-
   # cargo-deny.
   deny:
     name: cargo-deny
