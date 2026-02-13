@@ -1,3 +1,4 @@
+pub(crate) mod alert_state;
 mod async_state;
 mod executor;
 
@@ -50,4 +51,15 @@ pub fn create_executor<R: Runtime + 'static>(
     frame_context: Vec<FrameId>,
 ) -> Arc<dyn PlatformExecutor<R>> {
     Arc::new(linux::LinuxExecutor::new(window, timeouts, frame_context))
+}
+
+/// Register platform-specific webview handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook.
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    #[cfg(target_os = "windows")]
+    windows::register_webview_handlers(webview);
+    #[cfg(target_os = "macos")]
+    macos::register_webview_handlers(webview);
+    #[cfg(target_os = "linux")]
+    linux::register_webview_handlers(webview);
 }

@@ -59,5 +59,8 @@ pub fn init_with_port<R: Runtime>(port: u16) -> TauriPlugin<R> {
 
             Ok(())
         })
+        .on_webview_ready(|webview| {
+            platform::register_webview_handlers(&webview);
+        })
         .build()
 }

@@ -3,24 +3,28 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
-use block2::RcBlock;
+use block2::{DynBlock, RcBlock};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
 use objc2_foundation::{NSData, NSDictionary, NSError, NSObject, NSObjectProtocol, NSString};
 use objc2_web_kit::{
-    WKScriptMessage, WKScriptMessageHandler, WKSnapshotConfiguration, WKUserContentController,
-    WKWebView,
+    WKFrameInfo, WKScriptMessage, WKScriptMessageHandler, WKSnapshotConfiguration, WKUIDelegate,
+    WKUserContentController, WKWebView,
 };
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
+use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
+
+/// Key for associating the UI delegate with the webview
+static DELEGATE_KEY: u8 = 0;
 
 /// macOS `WebView` executor using `WKWebView` native APIs
 #[derive(Clone)]
@@ -38,6 +42,36 @@ impl<R: Runtime> MacOSExecutor<R> {
             frame_context,
         }
     }
+}
+
+/// Register `WKWebView` handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook to ensure
+/// the UI delegate is registered before any navigation completes.
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    use objc2::ffi::{objc_setAssociatedObject, OBJC_ASSOCIATION_RETAIN_NONATOMIC};
+
+    let _ = webview.with_webview(|webview| unsafe {
+        let wk_webview: &WKWebView = &*webview.inner().cast();
+
+        let mtm = MainThreadMarker::new_unchecked();
+        let delegate = WebDriverUIDelegate::new(mtm);
+        let delegate_protocol: Retained<ProtocolObject<dyn WKUIDelegate>> =
+            ProtocolObject::from_retained(delegate);
+
+        let _: () = msg_send![wk_webview, setUIDelegate: &*delegate_protocol];
+
+        // Associate delegate with webview - released when webview is deallocated
+        objc_setAssociatedObject(
+            std::ptr::from_ref::<WKWebView>(wk_webview)
+                .cast_mut()
+                .cast(),
+            std::ptr::addr_of!(DELEGATE_KEY).cast(),
+            Retained::into_raw(delegate_protocol).cast(),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC,
+        );
+
+        tracing::debug!("Registered UI delegate for webview");
+    });
 }
 
 #[async_trait]
@@ -332,31 +366,47 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
     // =========================================================================
 
     async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling with WKUIDelegate
-        Err(WebDriverErrorResponse::unknown_error(
-            "Alert handling not yet implemented - requires WKUIDelegate setup",
-        ))
+        if alert_state().respond(false, None) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling with WKUIDelegate
-        Err(WebDriverErrorResponse::unknown_error(
-            "Alert handling not yet implemented - requires WKUIDelegate setup",
-        ))
+        // For prompts, use input text if set, otherwise default text
+        let prompt_text = alert_state()
+            .get_prompt_input()
+            .or_else(|| alert_state().get_default_text());
+        if alert_state().respond(true, prompt_text) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement native alert handling with WKUIDelegate
-        Err(WebDriverErrorResponse::unknown_error(
-            "Alert handling not yet implemented - requires WKUIDelegate setup",
-        ))
+        match alert_state().get_message() {
+            Some(msg) => Ok(msg),
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+        }
     }
 
-    async fn send_alert_text(&self, _text: &str) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling with WKUIDelegate
-        Err(WebDriverErrorResponse::unknown_error(
-            "Alert handling not yet implemented - requires WKUIDelegate setup",
-        ))
+    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
+        match alert_state().get_alert_type() {
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+            Some(AlertType::Prompt) => {
+                // Store the text for when acceptAlert is called
+                if alert_state().set_prompt_input(text.to_string()) {
+                    Ok(())
+                } else {
+                    Err(WebDriverErrorResponse::no_such_alert())
+                }
+            }
+            Some(_) => Err(WebDriverErrorResponse::element_not_interactable(
+                "User prompt is not a prompt dialog",
+            )),
+        }
     }
 
     // =========================================================================
@@ -598,4 +648,134 @@ unsafe fn register_handler(webview: &WKWebView, state: &AsyncScriptState) {
     controller.addScriptMessageHandler_name(&handler_protocol, &name);
 
     tracing::debug!("Registered native message handler for webview");
+}
+
+// =============================================================================
+// Native UI Delegate for JavaScript Alerts
+// =============================================================================
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "WebDriverUIDelegate"]
+    #[ivars = ()]
+    struct WebDriverUIDelegate;
+
+    unsafe impl NSObjectProtocol for WebDriverUIDelegate {}
+
+    #[allow(non_snake_case)]
+    unsafe impl WKUIDelegate for WebDriverUIDelegate {
+        /// Handle JavaScript `alert()` calls
+        #[unsafe(method(webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:))]
+        fn webView_runJavaScriptAlertPanelWithMessage_initiatedByFrame_completionHandler(
+            &self,
+            _webview: &WKWebView,
+            message: &NSString,
+            _frame: &WKFrameInfo,
+            completion_handler: &DynBlock<dyn Fn()>,
+        ) {
+            let message_str = message.to_string();
+            tracing::debug!("Intercepted alert: {message_str}");
+
+            // Create channel for WebDriver response
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            // Store alert state with responder
+            alert_state().set_pending(PendingAlert {
+                message: message_str,
+                default_text: None,
+                alert_type: AlertType::Alert,
+                responder: tx,
+            });
+
+            // Wait for accept/dismiss (with timeout)
+            let timeout = std::time::Duration::from_secs(30);
+            let _ = rx.recv_timeout(timeout);
+
+            completion_handler.call(());
+        }
+
+        /// Handle JavaScript `confirm()` calls
+        #[unsafe(method(webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:))]
+        fn webView_runJavaScriptConfirmPanelWithMessage_initiatedByFrame_completionHandler(
+            &self,
+            _webview: &WKWebView,
+            message: &NSString,
+            _frame: &WKFrameInfo,
+            completion_handler: &DynBlock<dyn Fn(objc2::runtime::Bool)>,
+        ) {
+            let message_str = message.to_string();
+            tracing::debug!("Intercepted confirm: {message_str}");
+
+            // Create channel for WebDriver response
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            // Store confirm state with responder
+            alert_state().set_pending(PendingAlert {
+                message: message_str,
+                default_text: None,
+                alert_type: AlertType::Confirm,
+                responder: tx,
+            });
+
+            // Wait for accept/dismiss (with timeout)
+            let timeout = std::time::Duration::from_secs(30);
+            let response = rx.recv_timeout(timeout);
+
+            // Return true if accepted, false if dismissed or timeout
+            let accepted = response.map(|r| r.accepted).unwrap_or(true);
+
+            completion_handler.call((objc2::runtime::Bool::from(accepted),));
+        }
+
+        /// Handle JavaScript `prompt()` calls
+        #[unsafe(method(webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:))]
+        fn webView_runJavaScriptTextInputPanelWithPrompt_defaultText_initiatedByFrame_completionHandler(
+            &self,
+            _webview: &WKWebView,
+            prompt: &NSString,
+            default_text: Option<&NSString>,
+            _frame: &WKFrameInfo,
+            completion_handler: &DynBlock<dyn Fn(*mut NSString)>,
+        ) {
+            let prompt_str = prompt.to_string();
+            let default = default_text.map(std::string::ToString::to_string);
+            tracing::debug!("Intercepted prompt: {prompt_str}");
+
+            // Create channel for WebDriver response
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            // Store prompt state with responder
+            alert_state().set_pending(PendingAlert {
+                message: prompt_str,
+                default_text: default.clone(),
+                alert_type: AlertType::Prompt,
+                responder: tx,
+            });
+
+            // Wait for accept/dismiss (with timeout)
+            let timeout = std::time::Duration::from_secs(30);
+            let response = rx.recv_timeout(timeout);
+
+            // Return the prompt text if accepted, null if dismissed
+            let result: *mut NSString = match response {
+                Ok(r) if r.accepted => {
+                    let text = r.prompt_text.or(default).unwrap_or_default();
+                    let ns_str = NSString::from_str(&text);
+                    Retained::into_raw(ns_str)
+                }
+                _ => std::ptr::null_mut(), // Dismissed or timeout = null (cancel)
+            };
+
+            completion_handler.call((result,));
+        }
+    }
+);
+
+impl WebDriverUIDelegate {
+    fn new(mtm: MainThreadMarker) -> Retained<Self> {
+        let this = Self::alloc(mtm);
+        let this = this.set_ivars(());
+        unsafe { msg_send![super(this), init] }
+    }
 }

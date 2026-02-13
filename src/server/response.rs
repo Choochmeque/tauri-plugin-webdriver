@@ -81,6 +81,15 @@ impl WebDriverErrorResponse {
         )
     }
 
+    pub fn no_such_alert() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such alert",
+            "No alert is currently open",
+            None,
+        )
+    }
+
     pub fn javascript_error(message: &str, stacktrace: Option<String>) -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -144,6 +153,15 @@ impl WebDriverErrorResponse {
             StatusCode::NOT_FOUND,
             "no such frame",
             "Unable to locate frame",
+            None,
+        )
+    }
+
+    pub fn element_not_interactable(message: &str) -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "element not interactable",
+            message,
             None,
         )
     }

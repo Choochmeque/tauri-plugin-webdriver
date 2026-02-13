@@ -1,17 +1,40 @@
 import { navigateToTestPage } from '../helpers/test-utils.js';
 
-describe.skip('Alerts', () => {
+/**
+ * Clicks an element asynchronously and waits for an alert to appear.
+ * This triggers the click via setTimeout so that the execute() call returns
+ * before the alert blocks, allowing WebDriver to interact with the alert.
+ */
+async function clickAndWaitForAlert(selector: string): Promise<void> {
+  await browser.execute((sel: string) => {
+    setTimeout(() => {
+      const el = document.querySelector(sel) as HTMLElement;
+      el?.click();
+    }, 10);
+  }, selector);
+
+  // Wait for alert to be captured by the delegate
+  await browser.waitUntil(
+    async () => {
+      try {
+        await browser.getAlertText();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 2000, interval: 50 }
+  );
+}
+
+describe('Alerts', () => {
   beforeEach(async () => {
     await navigateToTestPage('alerts');
   });
 
   describe('Alert Dialog', () => {
     it('should accept alert', async () => {
-      const button = await $('[data-testid="alert-button"]');
-      await button.click();
-
-      // Wait for alert to appear
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="alert-button"]');
 
       // Accept the alert
       await browser.acceptAlert();
@@ -23,10 +46,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should dismiss alert', async () => {
-      const button = await $('[data-testid="alert-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="alert-button"]');
 
       // Dismiss the alert
       await browser.dismissAlert();
@@ -38,10 +58,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should get alert text', async () => {
-      const button = await $('[data-testid="alert-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="alert-button"]');
 
       // Get alert text
       const alertText = await browser.getAlertText();
@@ -52,10 +69,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should handle custom alert message', async () => {
-      const button = await $('[data-testid="custom-alert-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="custom-alert-button"]');
 
       const alertText = await browser.getAlertText();
       expect(alertText).toBe('Custom message: Hello from WebDriver test!');
@@ -66,10 +80,7 @@ describe.skip('Alerts', () => {
 
   describe('Confirm Dialog', () => {
     it('should accept confirm dialog', async () => {
-      const button = await $('[data-testid="confirm-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="confirm-button"]');
 
       // Accept (click OK)
       await browser.acceptAlert();
@@ -80,10 +91,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should dismiss confirm dialog', async () => {
-      const button = await $('[data-testid="confirm-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="confirm-button"]');
 
       // Dismiss (click Cancel)
       await browser.dismissAlert();
@@ -94,10 +102,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should get confirm dialog text', async () => {
-      const button = await $('[data-testid="confirm-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="confirm-button"]');
 
       const alertText = await browser.getAlertText();
       expect(alertText).toBe('Do you want to confirm this action?');
@@ -108,10 +113,7 @@ describe.skip('Alerts', () => {
 
   describe('Prompt Dialog', () => {
     it('should accept prompt with default value', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       // Accept without changing the value
       await browser.acceptAlert();
@@ -122,10 +124,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should send text to prompt', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       // Send custom text
       await browser.sendAlertText('Custom Input');
@@ -137,10 +136,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should dismiss prompt (cancel)', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       // Dismiss (click Cancel)
       await browser.dismissAlert();
@@ -151,10 +147,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should get prompt dialog text', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       const alertText = await browser.getAlertText();
       expect(alertText).toBe('Please enter your name:');
@@ -163,10 +156,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should send empty text to prompt', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       // Send empty string
       await browser.sendAlertText('');
@@ -178,10 +168,7 @@ describe.skip('Alerts', () => {
     });
 
     it('should send special characters to prompt', async () => {
-      const button = await $('[data-testid="prompt-button"]');
-      await button.click();
-
-      await browser.pause(100);
+      await clickAndWaitForAlert('[data-testid="prompt-button"]');
 
       // Send text with special characters
       await browser.sendAlertText('Test <>&"\'');
@@ -218,11 +205,25 @@ describe.skip('Alerts', () => {
 
   describe('Delayed Alert', () => {
     it('should handle delayed alert', async () => {
-      const button = await $('[data-testid="delayed-alert-button"]');
-      await button.click();
+      await browser.execute(() => {
+        setTimeout(() => {
+          const el = document.querySelector('[data-testid="delayed-alert-button"]') as HTMLElement;
+          el?.click();
+        }, 10);
+      });
 
-      // Wait for the delayed alert (1 second delay)
-      await browser.pause(1200);
+      // Wait for the delayed alert (has ~1 second delay in the app)
+      await browser.waitUntil(
+        async () => {
+          try {
+            await browser.getAlertText();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 3000, interval: 100 }
+      );
 
       const alertText = await browser.getAlertText();
       expect(alertText).toBe('Delayed alert!');

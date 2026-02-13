@@ -6,8 +6,9 @@ use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webkit2gtk::{UserContentManagerExt, WebViewExt};
+use webkit2gtk::{ScriptDialogType, UserContentManagerExt, WebViewExt};
 
+use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
@@ -29,6 +30,87 @@ impl<R: Runtime> LinuxExecutor<R> {
             frame_context,
         }
     }
+}
+
+/// Register `WebKitGTK` handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook to ensure
+/// the script dialog handler is registered before any navigation completes.
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    use crate::platform::alert_state::AlertResponse;
+    use webkit2gtk::WebViewExt as _;
+
+    let _ = webview.with_webview(|webview| {
+        let webview = webview.inner().clone();
+
+        // Connect to the script-dialog signal to intercept JS dialogs
+        webview.connect_script_dialog(move |_webview, dialog| {
+            let dialog_type = dialog.dialog_type();
+            let message = dialog.message().map(|s| s.to_string()).unwrap_or_default();
+
+            // Map WebKitGTK dialog type to our AlertType
+            let alert_type = match dialog_type {
+                ScriptDialogType::Alert => AlertType::Alert,
+                ScriptDialogType::Confirm => AlertType::Confirm,
+                ScriptDialogType::Prompt => AlertType::Prompt,
+                ScriptDialogType::BeforeUnloadConfirm | _ => {
+                    // BEFOREUNLOAD or unknown - let default behavior handle it
+                    return false;
+                }
+            };
+
+            let default_text = if alert_type == AlertType::Prompt {
+                dialog
+                    .prompt_get_default_text()
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty())
+            } else {
+                None
+            };
+
+            tracing::debug!("Intercepted {:?} dialog: {}", alert_type, message);
+
+            // Create channel for WebDriver response
+            let (tx, rx) = std::sync::mpsc::channel::<AlertResponse>();
+            alert_state().set_pending(PendingAlert {
+                message: message.clone(),
+                default_text: default_text.clone(),
+                alert_type,
+                responder: tx,
+            });
+
+            // Wait for WebDriver response with timeout
+            let timeout = std::time::Duration::from_secs(30);
+            let response = rx.recv_timeout(timeout);
+
+            match response {
+                Ok(AlertResponse {
+                    accepted,
+                    prompt_text,
+                }) => {
+                    if alert_type == AlertType::Confirm {
+                        dialog.confirm_set_confirmed(accepted);
+                    } else if alert_type == AlertType::Prompt && accepted {
+                        // Only set text if accepted - when dismissed, not calling
+                        // prompt_set_text() causes JavaScript to receive null
+                        let text = prompt_text.or(default_text).unwrap_or_default();
+                        dialog.prompt_set_text(&text);
+                    }
+                    // For Alert type, nothing special to set
+                }
+                Err(_) => {
+                    // Timeout - auto-accept
+                    if alert_type == AlertType::Confirm {
+                        dialog.confirm_set_confirmed(true);
+                    }
+                }
+            }
+
+            // Return true to indicate we handled the dialog
+            true
+        });
+
+        tracing::debug!("Registered script dialog handler for webview");
+    });
 }
 
 #[async_trait]
@@ -153,31 +235,45 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // =========================================================================
 
     async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Linux",
-        ))
+        if alert_state().respond(false, None) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Linux",
-        ))
+        let prompt_text = alert_state()
+            .get_prompt_input()
+            .or_else(|| alert_state().get_default_text());
+        if alert_state().respond(true, prompt_text) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Linux",
-        ))
+        match alert_state().get_message() {
+            Some(msg) => Ok(msg),
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+        }
     }
 
-    async fn send_alert_text(&self, _text: &str) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebKitGTK's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Linux",
-        ))
+    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
+        match alert_state().get_alert_type() {
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+            Some(AlertType::Prompt) => {
+                if alert_state().set_prompt_input(text.to_string()) {
+                    Ok(())
+                } else {
+                    Err(WebDriverErrorResponse::no_such_alert())
+                }
+            }
+            Some(_) => Err(WebDriverErrorResponse::element_not_interactable(
+                "User prompt is not a prompt dialog",
+            )),
+        }
     }
 
     // =========================================================================
