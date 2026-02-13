@@ -9,7 +9,6 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2WebMessageReceivedEventHandler,
 };
 use windows::core::{HSTRING, PCWSTR};
-use windows::Win32::Foundation::EventRegistrationToken;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
@@ -474,13 +473,9 @@ mod handlers {
     impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHandler_Impl {
         fn Invoke(
             &self,
-            _sender: Option<&ICoreWebView2>,
-            args: Option<&ICoreWebView2WebMessageReceivedEventArgs>,
+            _sender: windows::core::Ref<'_, ICoreWebView2>,
+            args: windows::core::Ref<'_, ICoreWebView2WebMessageReceivedEventArgs>,
         ) -> windows::core::Result<()> {
-            let Some(args) = args else {
-                return Ok(());
-            };
-
             unsafe {
                 let state_ptr = self.state_ptr;
                 if state_ptr.is_null() {
@@ -490,14 +485,14 @@ mod handlers {
                 let state = &*state_ptr;
 
                 // Get the message as JSON string
-                let mut message = windows::core::PWSTR::null();
-                if args.TryGetWebMessageAsString(&mut message).is_err() {
-                    // Not a string message, ignore
+                let Some(args_owned) = args.clone() else {
                     return Ok(());
+                };
+                let mut message_ptr = windows::core::PWSTR::null();
+                if args_owned.WebMessageAsJson(&mut message_ptr).is_err() {
+                    return Ok(()); // Failed to get message
                 }
-
-                let message_str = message.to_string().unwrap_or_default();
-                windows::Win32::System::Com::CoTaskMemFree(Some(message.as_ptr().cast()));
+                let message_str = message_ptr.to_string().unwrap_or_default();
 
                 // Parse the JSON message
                 let parsed: Result<Value, _> = serde_json::from_str(&message_str);
@@ -569,7 +564,8 @@ unsafe fn register_message_handler(webview: &ICoreWebView2, state: &AsyncScriptS
     let handler: ICoreWebView2WebMessageReceivedEventHandler =
         WebMessageReceivedHandler::new(state).into();
 
-    let mut token = EventRegistrationToken::default();
+    // We don't need to store the token since we never remove the handler
+    let mut token = std::mem::zeroed();
     if let Err(e) = webview.add_WebMessageReceived(&handler, &mut token) {
         tracing::error!("Failed to register WebMessageReceived handler: {e:?}");
     } else {
