@@ -2,9 +2,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::Write;
-use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
+use tauri::{Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
+use crate::webdriver::Timeouts;
 
 /// Tracks the state of modifier keys during action sequences
 #[derive(Debug, Clone, Copy, Default)]
@@ -40,6 +41,9 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
 
     /// Get a reference to the underlying window
     fn window(&self) -> &WebviewWindow<R>;
+
+    /// Get the current timeouts configuration
+    fn timeouts(&self) -> &Timeouts;
 
     // =========================================================================
     // Core JavaScript Execution
@@ -817,7 +821,10 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         extract_value(&result)
     }
 
-    /// Execute asynchronous JavaScript with callback
+    /// Execute asynchronous JavaScript with callback.
+    ///
+    /// Uses Tauri IPC to receive the callback result since webview `evaluateJavaScript`
+    /// APIs don't await JavaScript Promises.
     async fn execute_async_script(
         &self,
         script: &str,
@@ -826,39 +833,71 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let args_json = serde_json::to_string(args)
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
+        let async_id = uuid::Uuid::new_v4().to_string();
+
+        // Get async state and register this operation
+        let app = self.window().app_handle();
+        let async_state = app.state::<crate::AsyncScriptState>();
+        let rx = async_state.register(async_id.clone());
+
+        // Build wrapper with inline Tauri invoke
         let wrapper = format!(
-            r"new Promise(function(resolve, reject) {{
-                try {{
-                    var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-                    function deserializeArg(arg) {{
-                        if (arg === null || arg === undefined) return arg;
-                        if (Array.isArray(arg)) return arg.map(deserializeArg);
-                        if (typeof arg === 'object') {{
-                            if (arg[ELEMENT_KEY]) {{
-                                var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
-                                if (!el) throw new Error('stale element reference');
-                                return el;
-                            }}
-                            var result = {{}};
-                            for (var key in arg) {{
-                                if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
-                            }}
-                            return result;
+            r#"(function() {{
+                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                function deserializeArg(arg) {{
+                    if (arg === null || arg === undefined) return arg;
+                    if (Array.isArray(arg)) return arg.map(deserializeArg);
+                    if (typeof arg === 'object') {{
+                        if (arg[ELEMENT_KEY]) {{
+                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                            if (!el) throw new Error('stale element reference');
+                            return el;
                         }}
-                        return arg;
+                        var result = {{}};
+                        for (var key in arg) {{
+                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                        }}
+                        return result;
                     }}
-                    var args = {args_json}.map(deserializeArg);
-                    args.push(function(result) {{ resolve(result); }});
-                    var fn = function() {{ {script} }};
-                    fn.apply(null, args);
-                }} catch (e) {{
-                    reject(e);
+                    return arg;
                 }}
-            }})"
+                var __done = function(r) {{
+                    window.__TAURI_INTERNALS__.invoke('plugin:webdriver|resolve', {{
+                        id: '{async_id}',
+                        result: r,
+                        error: null
+                    }});
+                }};
+                var __args = {args_json}.map(deserializeArg);
+                __args.push(__done);
+                try {{
+                    (function() {{ {script} }}).apply(null, __args);
+                }} catch (e) {{
+                    window.__TAURI_INTERNALS__.invoke('plugin:webdriver|resolve', {{
+                        id: '{async_id}',
+                        result: null,
+                        error: e.message || String(e)
+                    }});
+                }}
+            }})()"#
         );
 
-        let result = self.evaluate_js(&wrapper).await?;
-        extract_value(&result)
+        // Execute the wrapper (returns immediately, doesn't wait for callback)
+        self.evaluate_js(&wrapper).await?;
+
+        // Wait for result with timeout
+        let timeout_ms = self.timeouts().script_ms;
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(value))) => Ok(value),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => {
+                async_state.cancel(&async_id);
+                Err(WebDriverErrorResponse::script_timeout())
+            }
+        }
     }
 
     // =========================================================================

@@ -40,6 +40,10 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
         &self.window
     }
 
+    fn timeouts(&self) -> &Timeouts {
+        &self.timeouts
+    }
+
     // =========================================================================
     // Core JavaScript Execution
     // =========================================================================

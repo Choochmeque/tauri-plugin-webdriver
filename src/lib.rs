@@ -8,11 +8,13 @@ mod desktop;
 #[cfg(mobile)]
 mod mobile;
 
+mod async_script;
 mod error;
 mod platform;
 mod server;
 mod webdriver;
 
+pub use async_script::AsyncScriptState;
 pub use error::{Error, Result};
 
 /// Default port for the `WebDriver` HTTP server
@@ -42,12 +44,16 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 #[must_use]
 pub fn init_with_port<R: Runtime>(port: u16) -> TauriPlugin<R> {
     Builder::new("webdriver")
+        .invoke_handler(tauri::generate_handler![async_script::resolve])
         .setup(move |app, api| {
             #[cfg(mobile)]
             let webdriver = mobile::init(app, api)?;
             #[cfg(desktop)]
             let webdriver = desktop::init(app, api);
             app.manage(webdriver);
+
+            // Manage async script state for IPC callbacks
+            app.manage(AsyncScriptState::default());
 
             // Start the WebDriver HTTP server
             let app_handle = app.app_handle().clone();
