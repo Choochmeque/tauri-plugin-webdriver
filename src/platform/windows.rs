@@ -11,7 +11,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
-use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
+use crate::platform::alert_state::{AlertState, AlertStateManager, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
@@ -50,7 +50,11 @@ impl<R: Runtime> WindowsExecutor<R> {
 /// This is called from the plugin's `on_webview_ready` hook to ensure
 /// the script dialog handler is registered before any navigation completes.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
-    let _ = webview.with_webview(|webview| unsafe {
+    // Get per-window alert state from the manager
+    let manager = webview.app_handle().state::<AlertStateManager>();
+    let alert_state = manager.get_or_create(webview.label());
+
+    let _ = webview.with_webview(move |webview| unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
         if let Ok(webview2) = webview.controller().CoreWebView2() {
@@ -66,7 +70,7 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
             }
 
             let handler: ICoreWebView2ScriptDialogOpeningEventHandler =
-                ScriptDialogOpeningHandler::new().into();
+                ScriptDialogOpeningHandler::new(alert_state).into();
 
             let mut token = std::mem::zeroed();
             if let Err(e) = webview2.add_ScriptDialogOpening(&handler, &raw mut token) {
@@ -399,10 +403,11 @@ mod handlers {
     use windows::core::{implement, Interface};
 
     use super::{
-        alert_state, AlertType, AsyncScriptState, CaptureResultSender, PendingAlert,
+        AlertState, AlertType, AsyncScriptState, CaptureResultSender, PendingAlert,
         ScriptResultSender, SendableComPtr, HANDLER_NAME,
     };
     use crate::platform::alert_state::AlertResponse;
+    use std::sync::Arc;
 
     #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
     pub struct ExecuteScriptHandler {
@@ -555,17 +560,17 @@ mod handlers {
 
     /// Handler for intercepting JavaScript alert/confirm/prompt dialogs
     #[implement(ICoreWebView2ScriptDialogOpeningEventHandler)]
-    pub struct ScriptDialogOpeningHandler;
-
-    impl ScriptDialogOpeningHandler {
-        pub fn new() -> Self {
-            Self
-        }
+    pub struct ScriptDialogOpeningHandler {
+        alert_state: Arc<AlertState>,
     }
 
-    impl Default for ScriptDialogOpeningHandler {
-        fn default() -> Self {
-            Self::new()
+    // SAFETY: Arc<AlertState> is Send + Sync
+    unsafe impl Send for ScriptDialogOpeningHandler {}
+    unsafe impl Sync for ScriptDialogOpeningHandler {}
+
+    impl ScriptDialogOpeningHandler {
+        pub fn new(alert_state: Arc<AlertState>) -> Self {
+            Self { alert_state }
         }
     }
 
@@ -636,7 +641,7 @@ mod handlers {
 
                 // Create channel for WebDriver response
                 let (tx, rx) = std::sync::mpsc::channel::<AlertResponse>();
-                alert_state().set_pending(PendingAlert {
+                self.alert_state.set_pending(PendingAlert {
                     message: message.clone(),
                     default_text: default_text.clone(),
                     alert_type,
