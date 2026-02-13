@@ -231,52 +231,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     }
 
     // =========================================================================
-    // Alerts
-    // =========================================================================
-
-    async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        if alert_state().respond(false, None) {
-            Ok(())
-        } else {
-            Err(WebDriverErrorResponse::no_such_alert())
-        }
-    }
-
-    async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        let prompt_text = alert_state()
-            .get_prompt_input()
-            .or_else(|| alert_state().get_default_text());
-        if alert_state().respond(true, prompt_text) {
-            Ok(())
-        } else {
-            Err(WebDriverErrorResponse::no_such_alert())
-        }
-    }
-
-    async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
-        match alert_state().get_message() {
-            Some(msg) => Ok(msg),
-            None => Err(WebDriverErrorResponse::no_such_alert()),
-        }
-    }
-
-    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
-        match alert_state().get_alert_type() {
-            None => Err(WebDriverErrorResponse::no_such_alert()),
-            Some(AlertType::Prompt) => {
-                if alert_state().set_prompt_input(text.to_string()) {
-                    Ok(())
-                } else {
-                    Err(WebDriverErrorResponse::no_such_alert())
-                }
-            }
-            Some(_) => Err(WebDriverErrorResponse::element_not_interactable(
-                "User prompt is not a prompt dialog",
-            )),
-        }
-    }
-
-    // =========================================================================
     // Print
     // =========================================================================
 

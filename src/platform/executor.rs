@@ -4,6 +4,7 @@ use serde_json::Value;
 use tauri::webview::Cookie as TauriCookie;
 use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
+use crate::platform::alert_state::{alert_state, AlertType};
 use crate::server::response::WebDriverErrorResponse;
 
 /// Tracks the state of modifier keys during action sequences
@@ -1416,20 +1417,56 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     // =========================================================================
-    // Alerts
+    // Alerts (using shared alert_state)
     // =========================================================================
 
     /// Dismiss the current alert (cancel)
-    async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
+        if alert_state().respond(false, None) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
+    }
 
     /// Accept the current alert (OK)
-    async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse>;
+    async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
+        // For prompts, use input text if set, otherwise default text
+        let prompt_text = alert_state()
+            .get_prompt_input()
+            .or_else(|| alert_state().get_default_text());
+        if alert_state().respond(true, prompt_text) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
+    }
 
     /// Get the text of the current alert
-    async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse>;
+    async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
+        match alert_state().get_message() {
+            Some(msg) => Ok(msg),
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+        }
+    }
 
     /// Send text to the current alert (for prompts)
-    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse>;
+    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
+        match alert_state().get_alert_type() {
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+            Some(AlertType::Prompt) => {
+                // Store the text for when acceptAlert is called
+                if alert_state().set_prompt_input(text.to_string()) {
+                    Ok(())
+                } else {
+                    Err(WebDriverErrorResponse::no_such_alert())
+                }
+            }
+            Some(_) => Err(WebDriverErrorResponse::element_not_interactable(
+                "User prompt is not a prompt dialog",
+            )),
+        }
+    }
 
     // =========================================================================
     // Print
