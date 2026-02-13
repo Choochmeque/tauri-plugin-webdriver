@@ -61,7 +61,9 @@ pub fn init_with_port<R: Runtime>(port: u16) -> TauriPlugin<R> {
         })
         .on_webview_ready(|webview| {
             #[cfg(target_os = "windows")]
-            platform::register_webview_handlers(webview);
+            platform::register_webview_handlers(&webview);
+            #[cfg(target_os = "macos")]
+            platform::register_webview_handlers(&webview);
         })
         .build()
 }

@@ -33,18 +33,22 @@ pub struct MacOSExecutor<R: Runtime> {
 
 impl<R: Runtime> MacOSExecutor<R> {
     pub fn new(window: WebviewWindow<R>, timeouts: Timeouts, frame_context: Vec<FrameId>) -> Self {
-        // Register UI delegate for alert/confirm/prompt handling
-        let _ = window.with_webview(|webview| unsafe {
-            let wk_webview: &WKWebView = &*webview.inner().cast();
-            register_ui_delegate(wk_webview);
-        });
-
         Self {
             window,
             timeouts,
             frame_context,
         }
     }
+}
+
+/// Register WKWebView handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook to ensure
+/// the UI delegate is registered before any navigation completes.
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    let _ = webview.with_webview(|webview| unsafe {
+        let wk_webview: &WKWebView = &*webview.inner().cast();
+        register_ui_delegate(wk_webview);
+    });
 }
 
 #[async_trait]
