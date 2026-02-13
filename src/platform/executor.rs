@@ -812,13 +812,17 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                     }}
                     return arg;
                 }}
-                var args = {args_json}.map(deserializeArg);
-                var fn = function() {{ {script} }};
-                return fn.apply(null, args);
+                try {{
+                    var args = {args_json}.map(deserializeArg);
+                    var fn = function() {{ {script} }};
+                    return {{ __wd_success: true, __wd_value: fn.apply(null, args) }};
+                }} catch (e) {{
+                    return {{ __wd_success: false, __wd_error: e.message || String(e) }};
+                }}
             }})()"
         );
         let result = self.evaluate_js(&wrapper).await?;
-        extract_value(&result)
+        extract_script_result(&result)
     }
 
     /// Execute asynchronous JavaScript with callback.
@@ -1602,6 +1606,41 @@ fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
             return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
+    Ok(Value::Null)
+}
+
+/// Extract result from execute_script wrapper (handles WebView2 null-on-error)
+fn extract_script_result(result: &Value) -> Result<Value, WebDriverErrorResponse> {
+    // First unwrap the evaluate_js result wrapper
+    let inner = if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            result.get("value").cloned().unwrap_or(Value::Null)
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
+        } else {
+            Value::Null
+        }
+    } else {
+        Value::Null
+    };
+
+    // Now check the script execution result
+    if let Some(success) = inner.get("__wd_success").and_then(Value::as_bool) {
+        if success {
+            return Ok(inner.get("__wd_value").cloned().unwrap_or(Value::Null));
+        } else if let Some(error) = inner.get("__wd_error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
+        }
+    }
+
+    // If we got null or no wrapper structure, it's likely a syntax error (WebView2 returns null)
+    if inner.is_null() || inner.get("__wd_success").is_none() {
+        return Err(WebDriverErrorResponse::javascript_error(
+            "Script execution failed (possible syntax error)",
+            None,
+        ));
+    }
+
     Ok(Value::Null)
 }
 
