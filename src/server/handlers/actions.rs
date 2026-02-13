@@ -113,9 +113,10 @@ pub async fn perform<R: Runtime + 'static>(
     let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let mut pointer_state = PointerState { x: 0, y: 0 };
     let mut modifier_state = ModifierState::default();
 

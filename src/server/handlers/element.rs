@@ -43,11 +43,12 @@ pub async fn find<R: Runtime + 'static>(
     let element_id = element_ref.id.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
     let strategy_js = strategy.to_selector_js(&request.value);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let found = executor.find_element(&strategy_js, &js_var).await?;
     if !found {
         return Err(WebDriverErrorResponse::no_such_element());
@@ -68,6 +69,7 @@ pub async fn find_all<R: Runtime + 'static>(
     let session = sessions.get(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -77,7 +79,7 @@ pub async fn find_all<R: Runtime + 'static>(
         ))
     })?;
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let strategy_js = strategy.to_selector_js_multiple(&request.value);
 
     // Use a temporary prefix for the trait method
@@ -124,9 +126,10 @@ pub async fn click<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     executor.click_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
@@ -148,9 +151,10 @@ pub async fn clear<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     executor.clear_element(&js_var).await?;
 
     Ok(WebDriverResponse::null())
@@ -173,9 +177,10 @@ pub async fn send_keys<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     executor
         .send_keys_to_element(&js_var, &request.text)
         .await?;
@@ -199,9 +204,10 @@ pub async fn get_text<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let text = executor.get_element_text(&js_var).await?;
     Ok(WebDriverResponse::success(text))
 }
@@ -222,9 +228,10 @@ pub async fn get_tag_name<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let tag_name = executor.get_element_tag_name(&js_var).await?;
     Ok(WebDriverResponse::success(tag_name))
 }
@@ -245,9 +252,10 @@ pub async fn get_attribute<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let attr = executor.get_element_attribute(&js_var, &name).await?;
     Ok(WebDriverResponse::success(attr))
 }
@@ -268,9 +276,10 @@ pub async fn get_property<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let prop = executor.get_element_property(&js_var, &name).await?;
     Ok(WebDriverResponse::success(prop))
 }
@@ -291,9 +300,10 @@ pub async fn is_displayed<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let displayed = executor.is_element_displayed(&js_var).await?;
     Ok(WebDriverResponse::success(displayed))
 }
@@ -314,9 +324,10 @@ pub async fn is_enabled<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let enabled = executor.is_element_enabled(&js_var).await?;
     Ok(WebDriverResponse::success(enabled))
 }
@@ -335,9 +346,10 @@ pub async fn get_active<R: Runtime + 'static>(
     let element_id = element_ref.id.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let found = executor.get_active_element(&js_var).await?;
     if !found {
         return Err(WebDriverErrorResponse::no_such_element());
@@ -376,12 +388,13 @@ pub async fn find_from_element<R: Runtime + 'static>(
     let element_id = element_ref.id.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
     // Use the locator method that generates expressions expecting `parent` to be defined
     let strategy_js = strategy.to_selector_js_single_from_element(&request.value);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let found = executor
         .find_element_from_element(&parent_js_var, &strategy_js, &js_var)
         .await?;
@@ -410,6 +423,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
     let parent_js_var = parent_element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
     let strategy = LocatorStrategy::from_string(&request.using).ok_or_else(|| {
@@ -419,7 +433,7 @@ pub async fn find_all_from_element<R: Runtime + 'static>(
         ))
     })?;
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let strategy_js = strategy.to_selector_js_from_element(&request.value);
 
     // Use a temporary prefix for the trait method
@@ -468,9 +482,10 @@ pub async fn is_selected<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let selected = executor.is_element_selected(&js_var).await?;
     Ok(WebDriverResponse::success(selected))
 }
@@ -491,9 +506,10 @@ pub async fn get_css_value<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let value = executor
         .get_element_css_value(&js_var, &property_name)
         .await?;
@@ -516,9 +532,10 @@ pub async fn get_rect<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let rect = executor.get_element_rect(&js_var).await?;
     Ok(WebDriverResponse::success(json!({
         "x": rect.x,
@@ -544,9 +561,10 @@ pub async fn get_computed_role<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let role = executor.get_element_computed_role(&js_var).await?;
     Ok(WebDriverResponse::success(role))
 }
@@ -567,9 +585,10 @@ pub async fn get_computed_label<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let label = executor.get_element_computed_label(&js_var).await?;
     Ok(WebDriverResponse::success(label))
 }
@@ -590,9 +609,10 @@ pub async fn take_screenshot<R: Runtime + 'static>(
     let js_var = element.js_ref.clone();
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let screenshot = executor.take_element_screenshot(&js_var).await?;
     Ok(WebDriverResponse::success(screenshot))
 }

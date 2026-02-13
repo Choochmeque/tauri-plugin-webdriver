@@ -1330,14 +1330,9 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // Frames
     // =========================================================================
 
-    /// Switch to a frame by ID (index, element reference, or null for top)
+    /// Switch to a frame by ID (index or element reference)
     async fn switch_to_frame(&self, id: FrameId) -> Result<(), WebDriverErrorResponse> {
         match id {
-            FrameId::Top => {
-                // Switch back to top-level context
-                // TODO: This is a no-op for now as we don't track frame context
-                Ok(())
-            }
             FrameId::Index(index) => {
                 let script = format!(
                     r"(function() {{
@@ -1372,7 +1367,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
 
     /// Switch to parent frame
     async fn switch_to_parent_frame(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: No-op for now - frame context tracking would be needed
+        // No-op - frame context is managed by the session, not the executor
         Ok(())
     }
 
@@ -1517,8 +1512,6 @@ pub struct WindowRect {
 /// Frame identifier for switching frames
 #[derive(Debug, Clone)]
 pub enum FrameId {
-    /// Top-level browsing context (null)
-    Top,
     /// Frame by index
     Index(u32),
     /// Frame by element reference (`js_var`)
@@ -1638,4 +1631,72 @@ fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
         }
     }
     Ok(Value::Null)
+}
+
+/// Wrap a JavaScript script to execute within a specific frame context.
+/// If `frame_context` is empty (top-level), returns the script unchanged.
+/// Otherwise, wraps the script to navigate to the correct frame before execution.
+pub fn wrap_script_for_frame_context(script: &str, frame_context: &[FrameId]) -> String {
+    use std::fmt::Write;
+
+    if frame_context.is_empty() {
+        return script.to_string();
+    }
+
+    // Build JavaScript to navigate to the target frame
+    let mut frame_nav = String::new();
+    frame_nav.push_str("(function() {\n");
+    frame_nav.push_str("  var ctx = window;\n");
+    frame_nav.push_str("  var doc = document;\n");
+
+    for (i, frame_id) in frame_context.iter().enumerate() {
+        match frame_id {
+            FrameId::Index(index) => {
+                let _ = writeln!(
+                    frame_nav,
+                    "  var frames{i} = doc.querySelectorAll('iframe, frame');"
+                );
+                let _ = writeln!(
+                    frame_nav,
+                    "  if ({index} >= frames{i}.length) throw new Error('no such frame');"
+                );
+                let _ = writeln!(frame_nav, "  var frame{i} = frames{i}[{index}];");
+                let _ = writeln!(
+                    frame_nav,
+                    "  if (!frame{i}.contentWindow) throw new Error('no such frame');"
+                );
+                let _ = writeln!(frame_nav, "  ctx = frame{i}.contentWindow;");
+                let _ = writeln!(frame_nav, "  doc = frame{i}.contentDocument;");
+            }
+            FrameId::Element(js_var) => {
+                let _ = writeln!(frame_nav, "  var frame{i} = window.{js_var};");
+                let _ = writeln!(
+                    frame_nav,
+                    "  if (!frame{i} || !doc.contains(frame{i})) throw new Error('stale element reference');"
+                );
+                let _ = writeln!(
+                    frame_nav,
+                    "  if (frame{i}.tagName !== 'IFRAME' && frame{i}.tagName !== 'FRAME') throw new Error('element is not a frame');"
+                );
+                let _ = writeln!(
+                    frame_nav,
+                    "  if (!frame{i}.contentWindow) throw new Error('no such frame');"
+                );
+                let _ = writeln!(frame_nav, "  ctx = frame{i}.contentWindow;");
+                let _ = writeln!(frame_nav, "  doc = frame{i}.contentDocument;");
+            }
+        }
+    }
+
+    // Execute the original script in the frame context
+    // We use Function constructor to evaluate in the frame's context
+    let escaped_script = script
+        .replace('\\', "\\\\")
+        .replace('`', "\\`")
+        .replace("${", "\\${");
+
+    let _ = writeln!(frame_nav, "  return ctx.eval(`{escaped_script}`);");
+    frame_nav.push_str("})()");
+
+    frame_nav
 }

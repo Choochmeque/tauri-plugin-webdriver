@@ -4,6 +4,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::element::ElementStore;
+use crate::platform::FrameId;
 use crate::server::response::WebDriverErrorResponse;
 
 /// Session timeouts configuration
@@ -39,6 +40,8 @@ pub struct Session {
     pub elements: ElementStore,
     /// Current window handle
     pub current_window: String,
+    /// Current frame context (stack of frame selectors)
+    pub frame_context: Vec<FrameId>,
 }
 
 impl Session {
@@ -48,6 +51,7 @@ impl Session {
             timeouts: Timeouts::default(),
             elements: ElementStore::new(),
             current_window: initial_window,
+            frame_context: Vec::new(),
         }
     }
 }

@@ -93,7 +93,8 @@ pub async fn create<R: Runtime + 'static>(
     let initial_window = wait_for_window(&state, 10_000).await?;
 
     // Query the webview for its user agent to get browser info
-    let executor = state.get_executor_for_window(&initial_window, Timeouts::default())?;
+    let executor =
+        state.get_executor_for_window(&initial_window, Timeouts::default(), Vec::new())?;
     let user_agent_result = executor
         .evaluate_js("(function() { return navigator.userAgent; })()")
         .await;

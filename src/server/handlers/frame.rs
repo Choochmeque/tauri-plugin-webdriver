@@ -21,12 +21,28 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
     Path(session_id): Path<String>,
     Json(request): Json<SwitchFrameRequest>,
 ) -> WebDriverResult {
+    // First, read session data without modifying
     let sessions = state.sessions.read().await;
     let session = sessions.get(&session_id)?;
 
-    // Parse the frame ID
-    let frame_id = match &request.id {
-        Value::Null => FrameId::Top,
+    // Get current context for validation (before any changes)
+    let current_window = session.current_window.clone();
+    let timeouts = session.timeouts.clone();
+    let current_frame_context = session.frame_context.clone();
+
+    // Parse the frame ID to determine what we're switching to
+    let (frame_id, js_var_for_element) = match &request.id {
+        Value::Null => {
+            // Switch to top-level context - no validation needed
+            drop(sessions);
+
+            // Update session: clear frame context
+            let mut sessions = state.sessions.write().await;
+            let session = sessions.get_mut(&session_id)?;
+            session.frame_context.clear();
+
+            return Ok(WebDriverResponse::null());
+        }
         Value::Number(n) => {
             let index = n.as_u64().ok_or_else(|| {
                 WebDriverErrorResponse::invalid_argument(
@@ -35,7 +51,8 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
             })?;
             let index = u32::try_from(index)
                 .map_err(|_| WebDriverErrorResponse::invalid_argument("Frame index too large"))?;
-            FrameId::Index(index)
+
+            (FrameId::Index(index), None)
         }
         Value::Object(obj) => {
             // W3C element reference format
@@ -50,7 +67,8 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
                     .get(element_id)
                     .ok_or_else(WebDriverErrorResponse::no_such_element)?;
 
-                FrameId::Element(element.js_ref.clone())
+                let js_var = element.js_ref.clone();
+                (FrameId::Element(js_var.clone()), Some(js_var))
             } else {
                 return Err(WebDriverErrorResponse::invalid_argument(
                     "Invalid frame identifier object",
@@ -63,13 +81,29 @@ pub async fn switch_to_frame<R: Runtime + 'static>(
             ));
         }
     };
-
-    let current_window = session.current_window.clone();
-    let timeouts = session.timeouts.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
-    executor.switch_to_frame(frame_id).await?;
+    // Create executor with CURRENT frame context (not the new one) to validate
+    let executor =
+        state.get_executor_for_window(&current_window, timeouts, current_frame_context)?;
+
+    // Validate the frame exists from current context
+    executor.switch_to_frame(frame_id.clone()).await?;
+
+    // Validation passed - now update the session's frame context
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
+
+    match &frame_id {
+        FrameId::Index(_) => {
+            session.frame_context.push(frame_id);
+        }
+        FrameId::Element(_) => {
+            if let Some(js_var) = js_var_for_element {
+                session.frame_context.push(FrameId::Element(js_var));
+            }
+        }
+    }
 
     Ok(WebDriverResponse::null())
 }
@@ -79,13 +113,18 @@ pub async fn switch_to_parent_frame<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
+
+    // Pop one level from frame context
+    session.frame_context.pop();
+
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
+    let frame_context = session.frame_context.clone();
     drop(sessions);
 
-    let executor = state.get_executor_for_window(&current_window, timeouts)?;
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     executor.switch_to_parent_frame().await?;
 
     Ok(WebDriverResponse::null())
