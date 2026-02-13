@@ -6,7 +6,6 @@
     "main"
   ],
   "permissions": [
-    "core:default",
-    "webdriver:default"
+    "core:default"
   ]
 }

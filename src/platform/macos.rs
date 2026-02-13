@@ -4,15 +4,20 @@ use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
 use block2::RcBlock;
-use objc2::runtime::AnyObject;
-use objc2::MainThreadMarker;
+use objc2::rc::Retained;
+use objc2::runtime::{AnyObject, ProtocolObject};
+use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
-use objc2_foundation::{NSData, NSDictionary, NSError, NSString};
-use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
+use objc2_foundation::{NSData, NSDictionary, NSError, NSObject, NSObjectProtocol, NSString};
+use objc2_web_kit::{
+    WKScriptMessage, WKScriptMessageHandler, WKSnapshotConfiguration, WKUserContentController,
+    WKWebView,
+};
 use serde_json::Value;
-use tauri::{Runtime, WebviewWindow};
+use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
+use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -96,6 +101,103 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
             Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        }
+    }
+
+    // =========================================================================
+    // Async Script Execution (Native Handler)
+    // =========================================================================
+
+    async fn execute_async_script(
+        &self,
+        script: &str,
+        args: &[Value],
+    ) -> Result<Value, WebDriverErrorResponse> {
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
+
+        let async_id = uuid::Uuid::new_v4().to_string();
+
+        // Get async state from Tauri's managed state
+        let app = self.window.app_handle().clone();
+        let async_state = app.state::<AsyncScriptState>();
+
+        // Register native message handler if not already registered for this window
+        let label = self.window.label();
+        if !async_state.mark_handler_registered(label) {
+            let app_clone = app.clone();
+            let handler_result = self.window.with_webview(move |webview| unsafe {
+                let wk_webview: &WKWebView = &*webview.inner().cast();
+                let state = app_clone.state::<AsyncScriptState>();
+                register_handler(wk_webview, state.inner());
+            });
+
+            if let Err(e) = handler_result {
+                return Err(WebDriverErrorResponse::unknown_error(&format!(
+                    "Failed to register message handler: {e}"
+                )));
+            }
+        }
+
+        // Register pending operation
+        let rx = async_state.register(async_id.clone());
+
+        // Build wrapper with native postMessage
+        let wrapper = format!(
+            r"(function() {{
+                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                function deserializeArg(arg) {{
+                    if (arg === null || arg === undefined) return arg;
+                    if (Array.isArray(arg)) return arg.map(deserializeArg);
+                    if (typeof arg === 'object') {{
+                        if (arg[ELEMENT_KEY]) {{
+                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                            if (!el) throw new Error('stale element reference');
+                            return el;
+                        }}
+                        var result = {{}};
+                        for (var key in arg) {{
+                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                        }}
+                        return result;
+                    }}
+                    return arg;
+                }}
+                var __done = function(r) {{
+                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
+                        id: '{async_id}',
+                        result: r,
+                        error: null
+                    }});
+                }};
+                var __args = {args_json}.map(deserializeArg);
+                __args.push(__done);
+                try {{
+                    (function() {{ {script} }}).apply(null, __args);
+                }} catch (e) {{
+                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
+                        id: '{async_id}',
+                        result: null,
+                        error: e.message || String(e)
+                    }});
+                }}
+            }})()"
+        );
+
+        // Execute the wrapper (returns immediately)
+        self.evaluate_js(&wrapper).await?;
+
+        // Wait for result with timeout
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(value))) => Ok(value),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => {
+                async_state.cancel(&async_id);
+                Err(WebDriverErrorResponse::script_timeout())
+            }
         }
     }
 
@@ -291,7 +393,7 @@ unsafe fn image_to_png_base64(image: &NSImage) -> Result<String, String> {
 }
 
 /// Convert an `NSObject` to a JSON value
-unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
+pub(super) unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     use objc2_foundation::NSString as NSStr;
 
     let class = obj.class();
@@ -375,4 +477,125 @@ unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
     }
 
     Value::Null
+}
+
+// =============================================================================
+// Native Message Handler for Async Scripts
+// =============================================================================
+
+/// Instance variables for our message handler - stores pointer to `AsyncScriptState`
+struct WebDriverMessageHandlerIvars {
+    state_ptr: *const AsyncScriptState,
+}
+
+// SAFETY: The state pointer is valid for the lifetime of the app (managed by Tauri)
+unsafe impl Send for WebDriverMessageHandlerIvars {}
+unsafe impl Sync for WebDriverMessageHandlerIvars {}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "WebDriverMessageHandler"]
+    #[ivars = WebDriverMessageHandlerIvars]
+    struct WebDriverMessageHandler;
+
+    unsafe impl NSObjectProtocol for WebDriverMessageHandler {}
+
+    unsafe impl WKScriptMessageHandler for WebDriverMessageHandler {
+        #[unsafe(method(userContentController:didReceiveScriptMessage:))]
+        fn user_content_controller_did_receive_script_message(
+            &self,
+            _controller: &WKUserContentController,
+            message: &WKScriptMessage,
+        ) {
+            unsafe {
+                let state_ptr = self.ivars().state_ptr;
+                if state_ptr.is_null() {
+                    tracing::error!("AsyncScriptState pointer is null");
+                    return;
+                }
+                let state = &*state_ptr;
+
+                let body = message.body();
+                let class_name = body.class().name().to_str().unwrap_or("");
+
+                if !class_name.contains("Dictionary") {
+                    tracing::warn!("Unexpected message body type: {}", class_name);
+                    return;
+                }
+
+                // Extract values from NSDictionary
+                let id_key = NSString::from_str("id");
+                let result_key = NSString::from_str("result");
+                let error_key = NSString::from_str("error");
+
+                let id_value: *mut AnyObject = msg_send![&*body, objectForKey: &*id_key];
+                if id_value.is_null() {
+                    tracing::warn!("Message missing 'id' field");
+                    return;
+                }
+
+                let id_class = (*id_value).class().name().to_str().unwrap_or("");
+                if !id_class.contains("String") {
+                    tracing::warn!("Message 'id' is not a string");
+                    return;
+                }
+
+                let id_ns: &NSString = &*id_value.cast::<NSString>();
+                let async_id = id_ns.to_string();
+
+                // Check for error
+                let error_value: *mut AnyObject = msg_send![&*body, objectForKey: &*error_key];
+                if !error_value.is_null() {
+                    let error_class = (*error_value).class().name().to_str().unwrap_or("");
+                    if error_class.contains("String") {
+                        let error_ns: &NSString = &*error_value.cast::<NSString>();
+                        let error_str = error_ns.to_string();
+                        if !error_str.is_empty() {
+                            state.complete(&async_id, Err(error_str));
+                            return;
+                        }
+                    }
+                }
+
+                // Extract result
+                let result_value: *mut AnyObject = msg_send![&*body, objectForKey: &*result_key];
+                let json_result = if result_value.is_null() {
+                    Value::Null
+                } else {
+                    ns_object_to_json(&*result_value)
+                };
+
+                state.complete(&async_id, Ok(json_result));
+            }
+        }
+    }
+);
+
+impl WebDriverMessageHandler {
+    fn new(mtm: MainThreadMarker, state: &AsyncScriptState) -> Retained<Self> {
+        let this = Self::alloc(mtm);
+        let this = this.set_ivars(WebDriverMessageHandlerIvars {
+            state_ptr: std::ptr::from_ref::<AsyncScriptState>(state),
+        });
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
+/// Register the message handler for a webview.
+///
+/// # Safety
+/// Must be called on the main thread with a valid webview and state reference.
+unsafe fn register_handler(webview: &WKWebView, state: &AsyncScriptState) {
+    let config = webview.configuration();
+    let controller = config.userContentController();
+
+    let mtm = MainThreadMarker::new_unchecked();
+    let handler = WebDriverMessageHandler::new(mtm, state);
+    let handler_protocol = ProtocolObject::from_retained(handler);
+    let name = NSString::from_str(HANDLER_NAME);
+
+    controller.addScriptMessageHandler_name(&handler_protocol, &name);
+
+    tracing::debug!("Registered native message handler for webview");
 }

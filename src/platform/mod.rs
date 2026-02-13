@@ -1,5 +1,7 @@
+mod async_state;
 mod executor;
 
+pub use async_state::AsyncScriptState;
 pub use executor::*;
 
 #[cfg(target_os = "macos")]

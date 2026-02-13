@@ -808,58 +808,27 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                     }}
                     return arg;
                 }}
-                var args = {args_json}.map(deserializeArg);
-                var fn = function() {{ {script} }};
-                return fn.apply(null, args);
+                try {{
+                    var args = {args_json}.map(deserializeArg);
+                    var fn = function() {{ {script} }};
+                    return {{ __wd_success: true, __wd_value: fn.apply(null, args) }};
+                }} catch (e) {{
+                    return {{ __wd_success: false, __wd_error: e.message || String(e) }};
+                }}
             }})()"
         );
         let result = self.evaluate_js(&wrapper).await?;
-        extract_value(&result)
+        extract_script_result(&result)
     }
 
-    /// Execute asynchronous JavaScript with callback
+    /// Execute asynchronous JavaScript with callback.
+    ///
+    /// Each platform must implement this using native message handlers.
     async fn execute_async_script(
         &self,
         script: &str,
         args: &[Value],
-    ) -> Result<Value, WebDriverErrorResponse> {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
-
-        let wrapper = format!(
-            r"new Promise(function(resolve, reject) {{
-                try {{
-                    var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-                    function deserializeArg(arg) {{
-                        if (arg === null || arg === undefined) return arg;
-                        if (Array.isArray(arg)) return arg.map(deserializeArg);
-                        if (typeof arg === 'object') {{
-                            if (arg[ELEMENT_KEY]) {{
-                                var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
-                                if (!el) throw new Error('stale element reference');
-                                return el;
-                            }}
-                            var result = {{}};
-                            for (var key in arg) {{
-                                if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
-                            }}
-                            return result;
-                        }}
-                        return arg;
-                    }}
-                    var args = {args_json}.map(deserializeArg);
-                    args.push(function(result) {{ resolve(result); }});
-                    var fn = function() {{ {script} }};
-                    fn.apply(null, args);
-                }} catch (e) {{
-                    reject(e);
-                }}
-            }})"
-        );
-
-        let result = self.evaluate_js(&wrapper).await?;
-        extract_value(&result)
-    }
+    ) -> Result<Value, WebDriverErrorResponse>;
 
     // =========================================================================
     // Screenshots
@@ -1633,6 +1602,41 @@ fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
             return Err(WebDriverErrorResponse::javascript_error(error, None));
         }
     }
+    Ok(Value::Null)
+}
+
+/// Extract result from `execute_script` wrapper (handles `WebView2` null-on-error)
+fn extract_script_result(result: &Value) -> Result<Value, WebDriverErrorResponse> {
+    // First unwrap the evaluate_js result wrapper
+    let inner = if let Some(success) = result.get("success").and_then(Value::as_bool) {
+        if success {
+            result.get("value").cloned().unwrap_or(Value::Null)
+        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
+        } else {
+            Value::Null
+        }
+    } else {
+        Value::Null
+    };
+
+    // Now check the script execution result
+    if let Some(success) = inner.get("__wd_success").and_then(Value::as_bool) {
+        if success {
+            return Ok(inner.get("__wd_value").cloned().unwrap_or(Value::Null));
+        } else if let Some(error) = inner.get("__wd_error").and_then(Value::as_str) {
+            return Err(WebDriverErrorResponse::javascript_error(error, None));
+        }
+    }
+
+    // If we got null or no wrapper structure, it's likely a syntax error (WebView2 returns null)
+    if inner.is_null() || inner.get("__wd_success").is_none() {
+        return Err(WebDriverErrorResponse::javascript_error(
+            "Script execution failed (possible syntax error)",
+            None,
+        ));
+    }
+
     Ok(Value::Null)
 }
 
