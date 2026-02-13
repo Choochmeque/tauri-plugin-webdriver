@@ -2,6 +2,7 @@ pub(crate) mod alert_state;
 mod async_state;
 mod executor;
 
+pub use alert_state::AlertStateManager;
 pub use async_state::AsyncScriptState;
 pub use executor::*;
 

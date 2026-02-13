@@ -52,6 +52,9 @@ pub fn init_with_port<R: Runtime>(port: u16) -> TauriPlugin<R> {
             // Manage async script state for native message handlers
             app.manage(platform::AsyncScriptState::default());
 
+            // Manage per-window alert state
+            app.manage(platform::AlertStateManager::default());
+
             // Start the WebDriver HTTP server
             let app_handle = app.app_handle().clone();
             server::start(app_handle, port);

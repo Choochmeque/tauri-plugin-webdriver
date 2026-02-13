@@ -1,9 +1,10 @@
 //! Cross-platform alert state management for `WebDriver`.
 //!
-//! This module provides shared state for handling JavaScript alert/confirm/prompt dialogs
+//! This module provides per-window state for handling JavaScript alert/confirm/prompt dialogs
 //! across different platform implementations.
 
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Type of pending alert
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +30,7 @@ pub struct PendingAlert {
     pub responder: std::sync::mpsc::Sender<AlertResponse>,
 }
 
-/// Global alert state for coordinating between UI delegate and `WebDriver` commands
+/// Per-window alert state for coordinating between UI delegate and `WebDriver` commands
 pub struct AlertState {
     pending: Mutex<Option<PendingAlert>>,
     /// Text input for prompt dialogs (set by `sendAlertText`)
@@ -37,7 +38,8 @@ pub struct AlertState {
 }
 
 impl AlertState {
-    fn new() -> Self {
+    /// Create a new empty alert state
+    pub fn new() -> Self {
         Self {
             pending: Mutex::new(None),
             prompt_input: Mutex::new(None),
@@ -124,8 +126,37 @@ impl AlertState {
     }
 }
 
-/// Global alert state instance
-pub fn alert_state() -> &'static AlertState {
-    static STATE: OnceLock<AlertState> = OnceLock::new();
-    STATE.get_or_init(AlertState::new)
+impl Default for AlertState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Manager for per-window alert states
+pub struct AlertStateManager {
+    states: Mutex<HashMap<String, Arc<AlertState>>>,
+}
+
+impl AlertStateManager {
+    /// Create a new alert state manager
+    pub fn new() -> Self {
+        Self {
+            states: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Get or create alert state for a window
+    pub fn get_or_create(&self, window_label: &str) -> Arc<AlertState> {
+        let mut states = self.states.lock().expect("AlertStateManager lock poisoned");
+        states
+            .entry(window_label.to_string())
+            .or_insert_with(|| Arc::new(AlertState::new()))
+            .clone()
+    }
+}
+
+impl Default for AlertStateManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }

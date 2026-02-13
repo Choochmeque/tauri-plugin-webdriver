@@ -17,7 +17,7 @@ use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 
-use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
+use crate::platform::alert_state::{AlertState, AlertStateManager, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
@@ -50,11 +50,14 @@ impl<R: Runtime> MacOSExecutor<R> {
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     use objc2::ffi::{objc_setAssociatedObject, OBJC_ASSOCIATION_RETAIN_NONATOMIC};
 
-    let _ = webview.with_webview(|webview| unsafe {
+    // Get per-window alert state from the manager
+    let manager = webview.app_handle().state::<AlertStateManager>();
+    let alert_state = manager.get_or_create(webview.label());
+
+    let _ = webview.with_webview(move |webview| unsafe {
         let wk_webview: &WKWebView = &*webview.inner().cast();
 
-        let mtm = MainThreadMarker::new_unchecked();
-        let delegate = WebDriverUIDelegate::new(mtm);
+        let delegate = WebDriverUIDelegate::new(alert_state);
         let delegate_protocol: Retained<ProtocolObject<dyn WKUIDelegate>> =
             ProtocolObject::from_retained(delegate);
 
@@ -606,11 +609,20 @@ unsafe fn register_handler(webview: &WKWebView, state: &AsyncScriptState) {
 // Native UI Delegate for JavaScript Alerts
 // =============================================================================
 
+/// Instance variables for UI delegate - stores per-window alert state
+struct WebDriverUIDelegateIvars {
+    alert_state: Arc<AlertState>,
+}
+
+// SAFETY: Arc<AlertState> is Send + Sync
+unsafe impl Send for WebDriverUIDelegateIvars {}
+unsafe impl Sync for WebDriverUIDelegateIvars {}
+
 define_class!(
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
     #[name = "WebDriverUIDelegate"]
-    #[ivars = ()]
+    #[ivars = WebDriverUIDelegateIvars]
     struct WebDriverUIDelegate;
 
     unsafe impl NSObjectProtocol for WebDriverUIDelegate {}
@@ -632,8 +644,8 @@ define_class!(
             // Create channel for WebDriver response
             let (tx, rx) = std::sync::mpsc::channel();
 
-            // Store alert state with responder
-            alert_state().set_pending(PendingAlert {
+            // Store alert state with responder (using per-window state from ivars)
+            self.ivars().alert_state.set_pending(PendingAlert {
                 message: message_str,
                 default_text: None,
                 alert_type: AlertType::Alert,
@@ -662,8 +674,8 @@ define_class!(
             // Create channel for WebDriver response
             let (tx, rx) = std::sync::mpsc::channel();
 
-            // Store confirm state with responder
-            alert_state().set_pending(PendingAlert {
+            // Store confirm state with responder (using per-window state from ivars)
+            self.ivars().alert_state.set_pending(PendingAlert {
                 message: message_str,
                 default_text: None,
                 alert_type: AlertType::Confirm,
@@ -697,8 +709,8 @@ define_class!(
             // Create channel for WebDriver response
             let (tx, rx) = std::sync::mpsc::channel();
 
-            // Store prompt state with responder
-            alert_state().set_pending(PendingAlert {
+            // Store prompt state with responder (using per-window state from ivars)
+            self.ivars().alert_state.set_pending(PendingAlert {
                 message: prompt_str,
                 default_text: default.clone(),
                 alert_type: AlertType::Prompt,
@@ -725,9 +737,12 @@ define_class!(
 );
 
 impl WebDriverUIDelegate {
-    fn new(mtm: MainThreadMarker) -> Retained<Self> {
+    /// # Safety
+    /// Must be called from the main thread.
+    unsafe fn new(alert_state: Arc<AlertState>) -> Retained<Self> {
+        let mtm = MainThreadMarker::new_unchecked();
         let this = Self::alloc(mtm);
-        let this = this.set_ivars(());
-        unsafe { msg_send![super(this), init] }
+        let this = this.set_ivars(WebDriverUIDelegateIvars { alert_state });
+        msg_send![super(this), init]
     }
 }
