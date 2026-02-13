@@ -7,9 +7,6 @@ pub use executor::*;
 #[cfg(target_os = "macos")]
 mod macos;
 
-#[cfg(target_os = "macos")]
-mod macos_handler;
-
 #[cfg(target_os = "windows")]
 mod windows;
 
