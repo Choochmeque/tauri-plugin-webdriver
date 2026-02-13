@@ -1338,12 +1338,15 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                     r"(function() {{
                         var frames = document.querySelectorAll('iframe, frame');
                         if ({index} >= frames.length) {{
-                            throw new Error('no such frame');
+                            return false;
                         }}
                         return true;
                     }})()"
                 );
-                self.evaluate_js(&script).await?;
+                let result = self.evaluate_js(&script).await?;
+                if result.get("value") == Some(&Value::Bool(false)) {
+                    return Err(WebDriverErrorResponse::no_such_frame());
+                }
                 Ok(())
             }
             FrameId::Element(js_var) => {

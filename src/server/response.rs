@@ -138,6 +138,15 @@ impl WebDriverErrorResponse {
             None,
         )
     }
+
+    pub fn no_such_frame() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no such frame",
+            "Unable to locate frame",
+            None,
+        )
+    }
 }
 
 impl IntoResponse for WebDriverErrorResponse {

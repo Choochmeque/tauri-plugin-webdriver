@@ -17,7 +17,8 @@ describe('Navigation', () => {
       const url = await browser.getUrl();
       expect(url).toBeDefined();
       expect(typeof url).toBe('string');
-      expect(url).toContain('tauri://localhost');
+      // Windows uses http://tauri.localhost/, macOS/Linux use tauri://localhost
+      expect(url).toMatch(/tauri[.:]localhost/);
     });
 
     it('should navigate to different hash routes', async () => {
