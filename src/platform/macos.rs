@@ -50,10 +50,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
         &self.window
     }
 
-    fn timeouts(&self) -> &Timeouts {
-        &self.timeouts
-    }
-
     // =========================================================================
     // Core JavaScript Execution
     // =========================================================================
@@ -148,7 +144,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
 
         // Build wrapper with native postMessage
         let wrapper = format!(
-            r#"(function() {{
+            r"(function() {{
                 var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
                 function deserializeArg(arg) {{
                     if (arg === null || arg === undefined) return arg;
@@ -185,7 +181,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
                         error: e.message || String(e)
                     }});
                 }}
-            }})()"#
+            }})()"
         );
 
         // Execute the wrapper (returns immediately)
@@ -487,7 +483,7 @@ pub(super) unsafe fn ns_object_to_json(obj: &AnyObject) -> Value {
 // Native Message Handler for Async Scripts
 // =============================================================================
 
-/// Instance variables for our message handler - stores pointer to AsyncScriptState
+/// Instance variables for our message handler - stores pointer to `AsyncScriptState`
 struct WebDriverMessageHandlerIvars {
     state_ptr: *const AsyncScriptState,
 }
@@ -580,7 +576,7 @@ impl WebDriverMessageHandler {
     fn new(mtm: MainThreadMarker, state: &AsyncScriptState) -> Retained<Self> {
         let this = Self::alloc(mtm);
         let this = this.set_ivars(WebDriverMessageHandlerIvars {
-            state_ptr: state as *const AsyncScriptState,
+            state_ptr: std::ptr::from_ref::<AsyncScriptState>(state),
         });
         unsafe { msg_send![super(this), init] }
     }

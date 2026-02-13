@@ -44,10 +44,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
         &self.window
     }
 
-    fn timeouts(&self) -> &Timeouts {
-        &self.timeouts
-    }
-
     // =========================================================================
     // Core JavaScript Execution
     // =========================================================================
@@ -378,8 +374,7 @@ mod handlers {
         ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
         ICoreWebView2CapturePreviewCompletedHandler_Impl,
         ICoreWebView2ExecuteScriptCompletedHandler,
-        ICoreWebView2ExecuteScriptCompletedHandler_Impl,
-        ICoreWebView2WebMessageReceivedEventArgs,
+        ICoreWebView2ExecuteScriptCompletedHandler_Impl, ICoreWebView2WebMessageReceivedEventArgs,
         ICoreWebView2WebMessageReceivedEventHandler,
         ICoreWebView2WebMessageReceivedEventHandler_Impl,
     };

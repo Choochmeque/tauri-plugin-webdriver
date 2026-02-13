@@ -5,7 +5,6 @@ use std::fmt::Write;
 use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 use crate::server::response::WebDriverErrorResponse;
-use crate::webdriver::Timeouts;
 
 /// Tracks the state of modifier keys during action sequences
 #[derive(Debug, Clone, Copy, Default)]
@@ -41,9 +40,6 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
 
     /// Get a reference to the underlying window
     fn window(&self) -> &WebviewWindow<R>;
-
-    /// Get the current timeouts configuration
-    fn timeouts(&self) -> &Timeouts;
 
     // =========================================================================
     // Core JavaScript Execution
@@ -1609,7 +1605,7 @@ fn extract_value(result: &Value) -> Result<Value, WebDriverErrorResponse> {
     Ok(Value::Null)
 }
 
-/// Extract result from execute_script wrapper (handles WebView2 null-on-error)
+/// Extract result from `execute_script` wrapper (handles `WebView2` null-on-error)
 fn extract_script_result(result: &Value) -> Result<Value, WebDriverErrorResponse> {
     // First unwrap the evaluate_js result wrapper
     let inner = if let Some(success) = result.get("success").and_then(Value::as_bool) {
