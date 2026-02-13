@@ -5,16 +5,30 @@ use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
-    ICoreWebView2WebMessageReceivedEventHandler,
+    ICoreWebView2, ICoreWebView2Deferral, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2ScriptDialogOpeningEventArgs, ICoreWebView2ScriptDialogOpeningEventHandler,
+    ICoreWebView2WebMessageReceivedEventHandler, COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT,
+    COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM, COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT,
 };
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
+use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
+
+/// Wrapper for raw COM pointer to allow sending across threads.
+/// SAFETY: The COM object must only be accessed from a COM-initialized thread.
+struct SendableComPtr(*mut std::ffi::c_void);
+unsafe impl Send for SendableComPtr {}
+
+impl SendableComPtr {
+    fn as_ptr(&self) -> *mut std::ffi::c_void {
+        self.0
+    }
+}
 
 /// Windows `WebView2` executor
 #[derive(Clone)]
@@ -32,6 +46,19 @@ impl<R: Runtime> WindowsExecutor<R> {
             frame_context,
         }
     }
+}
+
+/// Register WebView2 handlers at webview creation time.
+/// This is called from the plugin's `on_webview_ready` hook to ensure
+/// the script dialog handler is registered before any navigation completes.
+pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    let _ = webview.with_webview(|webview| unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+        if let Ok(webview2) = webview.controller().CoreWebView2() {
+            register_script_dialog_handler(&webview2);
+        }
+    });
 }
 
 #[async_trait]
@@ -183,31 +210,45 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
     // =========================================================================
 
     async fn dismiss_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebView2's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Windows",
-        ))
+        if alert_state().respond(false, None) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn accept_alert(&self) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebView2's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Windows",
-        ))
+        let prompt_text = alert_state()
+            .get_prompt_input()
+            .or_else(|| alert_state().get_default_text());
+        if alert_state().respond(true, prompt_text) {
+            Ok(())
+        } else {
+            Err(WebDriverErrorResponse::no_such_alert())
+        }
     }
 
     async fn get_alert_text(&self) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebView2's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Windows",
-        ))
+        match alert_state().get_message() {
+            Some(msg) => Ok(msg),
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+        }
     }
 
-    async fn send_alert_text(&self, _text: &str) -> Result<(), WebDriverErrorResponse> {
-        // TODO: Implement native alert handling using WebView2's dialog event handlers
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "Alert handling not yet implemented for Windows",
-        ))
+    async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
+        match alert_state().get_alert_type() {
+            None => Err(WebDriverErrorResponse::no_such_alert()),
+            Some(AlertType::Prompt) => {
+                if alert_state().set_prompt_input(text.to_string()) {
+                    Ok(())
+                } else {
+                    Err(WebDriverErrorResponse::no_such_alert())
+                }
+            }
+            Some(_) => Err(WebDriverErrorResponse::element_not_interactable(
+                "User prompt is not a prompt dialog",
+            )),
+        }
     }
 
     // =========================================================================
@@ -372,15 +413,22 @@ mod handlers {
     use serde_json::Value;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
-        ICoreWebView2CapturePreviewCompletedHandler_Impl,
+        ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2Deferral,
         ICoreWebView2ExecuteScriptCompletedHandler,
-        ICoreWebView2ExecuteScriptCompletedHandler_Impl, ICoreWebView2WebMessageReceivedEventArgs,
-        ICoreWebView2WebMessageReceivedEventHandler,
-        ICoreWebView2WebMessageReceivedEventHandler_Impl,
+        ICoreWebView2ExecuteScriptCompletedHandler_Impl, ICoreWebView2ScriptDialogOpeningEventArgs,
+        ICoreWebView2ScriptDialogOpeningEventHandler,
+        ICoreWebView2ScriptDialogOpeningEventHandler_Impl,
+        ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2WebMessageReceivedEventHandler,
+        ICoreWebView2WebMessageReceivedEventHandler_Impl, COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT,
+        COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM, COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT,
     };
-    use windows::core::implement;
+    use windows::core::{implement, Interface};
 
-    use super::{AsyncScriptState, CaptureResultSender, ScriptResultSender, HANDLER_NAME};
+    use super::{
+        alert_state, AlertType, AsyncScriptState, CaptureResultSender, PendingAlert,
+        ScriptResultSender, SendableComPtr, HANDLER_NAME,
+    };
+    use crate::platform::alert_state::AlertResponse;
 
     #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
     pub struct ExecuteScriptHandler {
@@ -530,9 +578,143 @@ mod handlers {
             Ok(())
         }
     }
+
+    /// Handler for intercepting JavaScript alert/confirm/prompt dialogs
+    #[implement(ICoreWebView2ScriptDialogOpeningEventHandler)]
+    pub struct ScriptDialogOpeningHandler;
+
+    impl ScriptDialogOpeningHandler {
+        pub fn new() -> Self {
+            Self
+        }
+    }
+
+    impl ICoreWebView2ScriptDialogOpeningEventHandler_Impl for ScriptDialogOpeningHandler_Impl {
+        fn Invoke(
+            &self,
+            _sender: windows::core::Ref<'_, ICoreWebView2>,
+            args: windows::core::Ref<'_, ICoreWebView2ScriptDialogOpeningEventArgs>,
+        ) -> windows::core::Result<()> {
+            unsafe {
+                let Some(args) = args.clone() else {
+                    return Ok(());
+                };
+
+                // Get dialog kind
+                let mut kind = std::mem::zeroed();
+                if args.Kind(&raw mut kind).is_err() {
+                    tracing::error!("Failed to get script dialog kind");
+                    return Ok(());
+                }
+
+                // Get message
+                let mut message_ptr = windows::core::PWSTR::null();
+                if args.Message(&raw mut message_ptr).is_err() {
+                    tracing::error!("Failed to get script dialog message");
+                    return Ok(());
+                }
+                let message = message_ptr.to_string().unwrap_or_default();
+
+                // Get default text for prompts
+                let mut default_text_ptr = windows::core::PWSTR::null();
+                let default_text = if args.DefaultText(&raw mut default_text_ptr).is_ok() {
+                    let text = default_text_ptr.to_string().unwrap_or_default();
+                    if text.is_empty() {
+                        None
+                    } else {
+                        Some(text)
+                    }
+                } else {
+                    None
+                };
+
+                // Map WebView2 dialog kind to our AlertType
+                let alert_type = if kind == COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT {
+                    AlertType::Alert
+                } else if kind == COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM {
+                    AlertType::Confirm
+                } else if kind == COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT {
+                    AlertType::Prompt
+                } else {
+                    // BEFOREUNLOAD or unknown - just accept it
+                    let _ = args.Accept();
+                    return Ok(());
+                };
+
+                tracing::debug!("Intercepted {:?} dialog: {}", alert_type, message);
+
+                // Get deferral to handle asynchronously (avoid blocking UI thread)
+                let deferral = match args.GetDeferral() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::error!("Failed to get deferral: {e:?}");
+                        let _ = args.Accept();
+                        return Ok(());
+                    }
+                };
+
+                // Create channel for WebDriver response
+                let (tx, rx) = std::sync::mpsc::channel::<AlertResponse>();
+                alert_state().set_pending(PendingAlert {
+                    message: message.clone(),
+                    default_text: default_text.clone(),
+                    alert_type,
+                    responder: tx,
+                });
+
+                // Wrap COM objects for thread transfer
+                let args_ptr = SendableComPtr(args.into_raw());
+                let deferral_ptr = SendableComPtr(deferral.into_raw());
+
+                // Spawn thread to wait for WebDriver response (don't block UI thread)
+                std::thread::spawn(move || {
+                    let timeout = std::time::Duration::from_secs(30);
+                    let response = rx.recv_timeout(timeout);
+
+                    // Reconstruct COM objects from raw pointers
+                    // SAFETY: These pointers came from valid COM objects and we're
+                    // accessing them from a single thread
+                    let args = unsafe {
+                        ICoreWebView2ScriptDialogOpeningEventArgs::from_raw(args_ptr.as_ptr())
+                    };
+                    let deferral =
+                        unsafe { ICoreWebView2Deferral::from_raw(deferral_ptr.as_ptr()) };
+
+                    match response {
+                        Ok(AlertResponse {
+                            accepted,
+                            prompt_text,
+                        }) => {
+                            if accepted {
+                                // Set prompt text if provided
+                                if let Some(text) = prompt_text {
+                                    let result = windows::core::HSTRING::from(text.as_str());
+                                    let _ =
+                                        args.SetResultText(windows::core::PCWSTR(result.as_ptr()));
+                                }
+                                let _ = args.Accept();
+                            }
+                            // If not accepted, don't call Accept() - dialog returns false/null
+                        }
+                        Err(_) => {
+                            // Timeout - auto-accept
+                            let _ = args.Accept();
+                        }
+                    }
+
+                    // Complete the deferral to let WebView2 continue
+                    let _ = deferral.Complete();
+                });
+            }
+            Ok(())
+        }
+    }
 }
 
-use handlers::{CapturePreviewHandler, ExecuteScriptHandler, WebMessageReceivedHandler};
+use handlers::{
+    CapturePreviewHandler, ExecuteScriptHandler, ScriptDialogOpeningHandler,
+    WebMessageReceivedHandler,
+};
 
 /// Extract string value from JavaScript result
 fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
@@ -570,4 +752,37 @@ unsafe fn register_message_handler(webview: &ICoreWebView2, state: &AsyncScriptS
     } else {
         tracing::debug!("Registered native message handler for webview");
     }
+}
+
+/// Register the `ScriptDialogOpening` handler for a webview.
+///
+/// This intercepts JavaScript alert/confirm/prompt dialogs and stores them
+/// for `WebDriver` to handle.
+///
+/// # Safety
+/// Must be called from a COM-initialized thread with a valid webview.
+unsafe fn register_script_dialog_handler(webview: &ICoreWebView2) {
+    // Disable default script dialogs so ScriptDialogOpening event fires
+    if let Ok(settings) = webview.Settings() {
+        if let Err(e) = settings.SetAreDefaultScriptDialogsEnabled(false) {
+            tracing::error!("Failed to disable default script dialogs: {e:?}");
+            return;
+        }
+    } else {
+        tracing::error!("Failed to get webview settings");
+        return;
+    }
+
+    let handler: ICoreWebView2ScriptDialogOpeningEventHandler =
+        ScriptDialogOpeningHandler::new().into();
+
+    let mut token = std::mem::zeroed();
+    if let Err(e) = webview.add_ScriptDialogOpening(&handler, &raw mut token) {
+        tracing::error!("Failed to register ScriptDialogOpening handler: {e:?}");
+    } else {
+        tracing::debug!("Registered script dialog handler for webview");
+    }
+
+    // Prevent handler from being dropped - leak it to keep the COM ref alive
+    std::mem::forget(handler);
 }
