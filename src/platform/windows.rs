@@ -2,12 +2,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
-use tauri::{Runtime, WebviewWindow};
+use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ExecuteScriptCompletedHandler;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2WebMessageReceivedEventHandler,
+};
 use windows::core::{HSTRING, PCWSTR};
+use windows::Win32::Foundation::EventRegistrationToken;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
+use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -220,6 +225,108 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
             "PDF printing not yet implemented for Windows",
         ))
     }
+
+    // =========================================================================
+    // Async Script Execution
+    // =========================================================================
+
+    async fn execute_async_script(
+        &self,
+        script: &str,
+        args: &[Value],
+    ) -> Result<Value, WebDriverErrorResponse> {
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
+
+        let async_id = uuid::Uuid::new_v4().to_string();
+
+        // Get async state and register this operation
+        let app = self.window.app_handle().clone();
+        let async_state = app.state::<AsyncScriptState>();
+        let label = self.window.label().to_string();
+
+        // Register handler if not already registered for this window
+        if !async_state.mark_handler_registered(&label) {
+            let app_clone = app.clone();
+            let handler_result = self.window.with_webview(move |webview| unsafe {
+                let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+                if let Ok(webview2) = webview.controller().CoreWebView2() {
+                    let state = app_clone.state::<AsyncScriptState>();
+                    register_message_handler(&webview2, state.inner());
+                }
+            });
+
+            if let Err(e) = handler_result {
+                return Err(WebDriverErrorResponse::unknown_error(&format!(
+                    "Failed to register message handler: {e}"
+                )));
+            }
+        }
+
+        let rx = async_state.register(async_id.clone());
+
+        // Build wrapper script using postMessage
+        let wrapper = format!(
+            r#"(function() {{
+                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+                function deserializeArg(arg) {{
+                    if (arg === null || arg === undefined) return arg;
+                    if (Array.isArray(arg)) return arg.map(deserializeArg);
+                    if (typeof arg === 'object') {{
+                        if (arg[ELEMENT_KEY]) {{
+                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                            if (!el) throw new Error('stale element reference');
+                            return el;
+                        }}
+                        var result = {{}};
+                        for (var key in arg) {{
+                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                        }}
+                        return result;
+                    }}
+                    return arg;
+                }}
+                var __done = function(r) {{
+                    window.chrome.webview.postMessage(JSON.stringify({{
+                        handler: '{HANDLER_NAME}',
+                        id: '{async_id}',
+                        result: r,
+                        error: null
+                    }}));
+                }};
+                var __args = {args_json}.map(deserializeArg);
+                __args.push(__done);
+                try {{
+                    (function() {{ {script} }}).apply(null, __args);
+                }} catch (e) {{
+                    window.chrome.webview.postMessage(JSON.stringify({{
+                        handler: '{HANDLER_NAME}',
+                        id: '{async_id}',
+                        result: null,
+                        error: e.message || String(e)
+                    }}));
+                }}
+            }})()"#
+        );
+
+        // Execute the wrapper (returns immediately)
+        self.evaluate_js(&wrapper).await?;
+
+        // Wait for result with timeout
+        let timeout_ms = self.timeouts.script_ms;
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(value))) => Ok(value),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => {
+                async_state.cancel(&async_id);
+                Err(WebDriverErrorResponse::script_timeout())
+            }
+        }
+    }
 }
 
 // =============================================================================
@@ -269,14 +376,17 @@ mod handlers {
 
     use serde_json::Value;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2CapturePreviewCompletedHandler,
+        ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
         ICoreWebView2CapturePreviewCompletedHandler_Impl,
         ICoreWebView2ExecuteScriptCompletedHandler,
         ICoreWebView2ExecuteScriptCompletedHandler_Impl,
+        ICoreWebView2WebMessageReceivedEventArgs,
+        ICoreWebView2WebMessageReceivedEventHandler,
+        ICoreWebView2WebMessageReceivedEventHandler_Impl,
     };
     use windows::core::implement;
 
-    use super::{CaptureResultSender, ScriptResultSender};
+    use super::{AsyncScriptState, CaptureResultSender, ScriptResultSender, HANDLER_NAME};
 
     #[implement(ICoreWebView2ExecuteScriptCompletedHandler)]
     pub struct ExecuteScriptHandler {
@@ -342,9 +452,93 @@ mod handlers {
             Ok(())
         }
     }
+
+    /// Handler for receiving web messages from JavaScript via postMessage
+    #[implement(ICoreWebView2WebMessageReceivedEventHandler)]
+    pub struct WebMessageReceivedHandler {
+        state_ptr: *const AsyncScriptState,
+    }
+
+    // SAFETY: The state pointer is valid for the lifetime of the app (managed by Tauri)
+    unsafe impl Send for WebMessageReceivedHandler {}
+    unsafe impl Sync for WebMessageReceivedHandler {}
+
+    impl WebMessageReceivedHandler {
+        pub fn new(state: &AsyncScriptState) -> Self {
+            Self {
+                state_ptr: state as *const AsyncScriptState,
+            }
+        }
+    }
+
+    impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHandler_Impl {
+        fn Invoke(
+            &self,
+            _sender: Option<&ICoreWebView2>,
+            args: Option<&ICoreWebView2WebMessageReceivedEventArgs>,
+        ) -> windows::core::Result<()> {
+            let Some(args) = args else {
+                return Ok(());
+            };
+
+            unsafe {
+                let state_ptr = self.state_ptr;
+                if state_ptr.is_null() {
+                    tracing::error!("AsyncScriptState pointer is null");
+                    return Ok(());
+                }
+                let state = &*state_ptr;
+
+                // Get the message as JSON string
+                let mut message = windows::core::PWSTR::null();
+                if args.TryGetWebMessageAsString(&mut message).is_err() {
+                    // Not a string message, ignore
+                    return Ok(());
+                }
+
+                let message_str = message.to_string().unwrap_or_default();
+                windows::Win32::System::Com::CoTaskMemFree(Some(message.as_ptr().cast()));
+
+                // Parse the JSON message
+                let parsed: Result<Value, _> = serde_json::from_str(&message_str);
+                let msg = match parsed {
+                    Ok(v) => v,
+                    Err(_) => return Ok(()), // Not our message format
+                };
+
+                // Check if this is our handler
+                let handler = msg.get("handler").and_then(Value::as_str);
+                if handler != Some(HANDLER_NAME) {
+                    return Ok(()); // Not for us
+                }
+
+                // Extract async ID
+                let async_id = match msg.get("id").and_then(Value::as_str) {
+                    Some(id) => id.to_string(),
+                    None => {
+                        tracing::warn!("Message missing 'id' field");
+                        return Ok(());
+                    }
+                };
+
+                // Check for error
+                if let Some(error) = msg.get("error").and_then(Value::as_str) {
+                    if !error.is_empty() {
+                        state.complete(&async_id, Err(error.to_string()));
+                        return Ok(());
+                    }
+                }
+
+                // Extract result
+                let result = msg.get("result").cloned().unwrap_or(Value::Null);
+                state.complete(&async_id, Ok(result));
+            }
+            Ok(())
+        }
+    }
 }
 
-use handlers::{CapturePreviewHandler, ExecuteScriptHandler};
+use handlers::{CapturePreviewHandler, ExecuteScriptHandler, WebMessageReceivedHandler};
 
 /// Extract string value from JavaScript result
 fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
@@ -361,4 +555,24 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
         }
     }
     Ok(String::new())
+}
+
+// =============================================================================
+// Native Message Handler Registration
+// =============================================================================
+
+/// Register the WebMessage handler for a webview.
+///
+/// # Safety
+/// Must be called from a COM-initialized thread with a valid webview.
+unsafe fn register_message_handler(webview: &ICoreWebView2, state: &AsyncScriptState) {
+    let handler: ICoreWebView2WebMessageReceivedEventHandler =
+        WebMessageReceivedHandler::new(state).into();
+
+    let mut token = EventRegistrationToken::default();
+    if let Err(e) = webview.add_WebMessageReceived(&handler, &mut token) {
+        tracing::error!("Failed to register WebMessageReceived handler: {e:?}");
+    } else {
+        tracing::debug!("Registered native message handler for webview");
+    }
 }
