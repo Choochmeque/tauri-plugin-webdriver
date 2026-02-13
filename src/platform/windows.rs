@@ -263,7 +263,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
 
         // Build wrapper script using postMessage
         let wrapper = format!(
-            r#"(function() {{
+            r"(function() {{
                 var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
                 function deserializeArg(arg) {{
                     if (arg === null || arg === undefined) return arg;
@@ -302,7 +302,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
                         error: e.message || String(e)
                     }}));
                 }}
-            }})()"#
+            }})()"
         );
 
         // Execute the wrapper (returns immediately)
@@ -483,17 +483,17 @@ mod handlers {
                 let Some(args_owned) = args.clone() else {
                     return Ok(());
                 };
-                let mut message_ptr = windows::core::PWSTR::null();
-                if args_owned.WebMessageAsJson(&mut message_ptr).is_err() {
+                let mut msg_ptr = windows::core::PWSTR::null();
+                if args_owned.WebMessageAsJson(&raw mut msg_ptr).is_err() {
                     return Ok(()); // Failed to get message
                 }
-                let message_str = message_ptr.to_string().unwrap_or_default();
+                let msg_text = msg_ptr.to_string().unwrap_or_default();
 
-                // WebMessageAsJson returns the message as a JSON value.
-                // Since JS sends JSON.stringify({...}), the message is a string,
+                // `WebMessageAsJson` returns the message as a JSON value.
+                // Since JS sends `JSON.stringify({...})`, the message is a string,
                 // so we get a JSON-encoded string (with extra quotes).
                 // First parse to get the inner string, then parse that as our object.
-                let inner_str: String = match serde_json::from_str(&message_str) {
+                let inner_str: String = match serde_json::from_str(&msg_text) {
                     Ok(s) => s,
                     Err(_) => return Ok(()), // Not a JSON string
                 };
@@ -509,13 +509,11 @@ mod handlers {
                 }
 
                 // Extract async ID
-                let async_id = match msg.get("id").and_then(Value::as_str) {
-                    Some(id) => id.to_string(),
-                    None => {
-                        tracing::warn!("Message missing 'id' field");
-                        return Ok(());
-                    }
+                let Some(async_id) = msg.get("id").and_then(Value::as_str) else {
+                    tracing::warn!("Message missing 'id' field");
+                    return Ok(());
                 };
+                let async_id = async_id.to_string();
 
                 // Check for error
                 if let Some(error) = msg.get("error").and_then(Value::as_str) {
@@ -557,7 +555,7 @@ fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse
 // Native Message Handler Registration
 // =============================================================================
 
-/// Register the WebMessage handler for a webview.
+/// Register the `WebMessage` handler for a webview.
 ///
 /// # Safety
 /// Must be called from a COM-initialized thread with a valid webview.
@@ -567,7 +565,7 @@ unsafe fn register_message_handler(webview: &ICoreWebView2, state: &AsyncScriptS
 
     // We don't need to store the token since we never remove the handler
     let mut token = std::mem::zeroed();
-    if let Err(e) = webview.add_WebMessageReceived(&handler, &mut token) {
+    if let Err(e) = webview.add_WebMessageReceived(&handler, &raw mut token) {
         tracing::error!("Failed to register WebMessageReceived handler: {e:?}");
     } else {
         tracing::debug!("Registered native message handler for webview");
