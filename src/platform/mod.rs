@@ -55,21 +55,11 @@ pub fn create_executor<R: Runtime + 'static>(
 
 /// Register platform-specific webview handlers at webview creation time.
 /// This is called from the plugin's `on_webview_ready` hook.
-#[cfg(target_os = "windows")]
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    #[cfg(target_os = "windows")]
     windows::register_webview_handlers(webview);
-}
-
-/// Register platform-specific webview handlers at webview creation time.
-/// This is called from the plugin's `on_webview_ready` hook.
-#[cfg(target_os = "macos")]
-pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    #[cfg(target_os = "macos")]
     macos::register_webview_handlers(webview);
-}
-
-/// Register platform-specific webview handlers at webview creation time.
-/// This is called from the plugin's `on_webview_ready` hook.
-#[cfg(target_os = "linux")]
-pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    #[cfg(target_os = "linux")]
     linux::register_webview_handlers(webview);
 }

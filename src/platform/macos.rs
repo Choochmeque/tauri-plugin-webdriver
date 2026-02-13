@@ -23,6 +23,9 @@ use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, 
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
 
+/// Key for associating the UI delegate with the webview
+static DELEGATE_KEY: u8 = 0;
+
 /// macOS `WebView` executor using `WKWebView` native APIs
 #[derive(Clone)]
 pub struct MacOSExecutor<R: Runtime> {
@@ -45,9 +48,29 @@ impl<R: Runtime> MacOSExecutor<R> {
 /// This is called from the plugin's `on_webview_ready` hook to ensure
 /// the UI delegate is registered before any navigation completes.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
+    use objc2::ffi::{objc_setAssociatedObject, OBJC_ASSOCIATION_RETAIN_NONATOMIC};
+
     let _ = webview.with_webview(|webview| unsafe {
         let wk_webview: &WKWebView = &*webview.inner().cast();
-        register_ui_delegate(wk_webview);
+
+        let mtm = MainThreadMarker::new_unchecked();
+        let delegate = WebDriverUIDelegate::new(mtm);
+        let delegate_protocol: Retained<ProtocolObject<dyn WKUIDelegate>> =
+            ProtocolObject::from_retained(delegate);
+
+        let _: () = msg_send![wk_webview, setUIDelegate: &*delegate_protocol];
+
+        // Associate delegate with webview - released when webview is deallocated
+        objc_setAssociatedObject(
+            std::ptr::from_ref::<WKWebView>(wk_webview)
+                .cast_mut()
+                .cast(),
+            std::ptr::addr_of!(DELEGATE_KEY).cast(),
+            Retained::into_raw(delegate_protocol).cast(),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC,
+        );
+
+        tracing::debug!("Registered UI delegate for webview");
     });
 }
 
@@ -755,32 +778,4 @@ impl WebDriverUIDelegate {
         let this = this.set_ivars(());
         unsafe { msg_send![super(this), init] }
     }
-}
-
-/// Key for associating the UI delegate with the webview
-static DELEGATE_KEY: u8 = 0;
-
-/// Register the UI delegate for a webview to enable JavaScript alerts.
-///
-/// # Safety
-/// Must be called on the main thread with a valid webview.
-unsafe fn register_ui_delegate(webview: &WKWebView) {
-    use objc2::ffi::{objc_setAssociatedObject, OBJC_ASSOCIATION_RETAIN_NONATOMIC};
-
-    let mtm = MainThreadMarker::new_unchecked();
-    let delegate = WebDriverUIDelegate::new(mtm);
-    let delegate_protocol: Retained<ProtocolObject<dyn WKUIDelegate>> =
-        ProtocolObject::from_retained(delegate);
-
-    let _: () = msg_send![webview, setUIDelegate: &*delegate_protocol];
-
-    // Associate delegate with webview - released when webview is deallocated
-    objc_setAssociatedObject(
-        std::ptr::from_ref::<WKWebView>(webview).cast_mut().cast(),
-        std::ptr::addr_of!(DELEGATE_KEY).cast(),
-        Retained::into_raw(delegate_protocol).cast(),
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC,
-    );
-
-    tracing::debug!("Registered UI delegate for webview");
 }

@@ -54,7 +54,29 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
         if let Ok(webview2) = webview.controller().CoreWebView2() {
-            register_script_dialog_handler(&webview2);
+            // Disable default script dialogs so ScriptDialogOpening event fires
+            if let Ok(settings) = webview2.Settings() {
+                if let Err(e) = settings.SetAreDefaultScriptDialogsEnabled(false) {
+                    tracing::error!("Failed to disable default script dialogs: {e:?}");
+                    return;
+                }
+            } else {
+                tracing::error!("Failed to get webview settings");
+                return;
+            }
+
+            let handler: ICoreWebView2ScriptDialogOpeningEventHandler =
+                ScriptDialogOpeningHandler::new().into();
+
+            let mut token = std::mem::zeroed();
+            if let Err(e) = webview2.add_ScriptDialogOpening(&handler, &raw mut token) {
+                tracing::error!("Failed to register ScriptDialogOpening handler: {e:?}");
+            } else {
+                tracing::debug!("Registered script dialog handler for webview");
+            }
+
+            // Prevent handler from being dropped - leak it to keep the COM ref alive
+            std::mem::forget(handler);
         }
     });
 }
@@ -759,37 +781,4 @@ unsafe fn register_message_handler(webview: &ICoreWebView2, state: &AsyncScriptS
     } else {
         tracing::debug!("Registered native message handler for webview");
     }
-}
-
-/// Register the `ScriptDialogOpening` handler for a webview.
-///
-/// This intercepts JavaScript alert/confirm/prompt dialogs and stores them
-/// for `WebDriver` to handle.
-///
-/// # Safety
-/// Must be called from a COM-initialized thread with a valid webview.
-unsafe fn register_script_dialog_handler(webview: &ICoreWebView2) {
-    // Disable default script dialogs so ScriptDialogOpening event fires
-    if let Ok(settings) = webview.Settings() {
-        if let Err(e) = settings.SetAreDefaultScriptDialogsEnabled(false) {
-            tracing::error!("Failed to disable default script dialogs: {e:?}");
-            return;
-        }
-    } else {
-        tracing::error!("Failed to get webview settings");
-        return;
-    }
-
-    let handler: ICoreWebView2ScriptDialogOpeningEventHandler =
-        ScriptDialogOpeningHandler::new().into();
-
-    let mut token = std::mem::zeroed();
-    if let Err(e) = webview.add_ScriptDialogOpening(&handler, &raw mut token) {
-        tracing::error!("Failed to register ScriptDialogOpening handler: {e:?}");
-    } else {
-        tracing::debug!("Registered script dialog handler for webview");
-    }
-
-    // Prevent handler from being dropped - leak it to keep the COM ref alive
-    std::mem::forget(handler);
 }
