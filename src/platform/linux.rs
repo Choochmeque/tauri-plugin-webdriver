@@ -89,15 +89,11 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
                 }) => {
                     if alert_type == AlertType::Confirm {
                         dialog.confirm_set_confirmed(accepted);
-                    } else if alert_type == AlertType::Prompt {
-                        if accepted {
-                            let text = prompt_text.or(default_text).unwrap_or_default();
-                            dialog.prompt_set_text(&text);
-                        } else {
-                            // Dismissed prompt - WebKitGTK doesn't have a direct "cancel" method
-                            // Setting empty text is the closest we can get
-                            dialog.prompt_set_text("");
-                        }
+                    } else if alert_type == AlertType::Prompt && accepted {
+                        // Only set text if accepted - when dismissed, not calling
+                        // prompt_set_text() causes JavaScript to receive null
+                        let text = prompt_text.or(default_text).unwrap_or_default();
+                        dialog.prompt_set_text(&text);
                     }
                     // For Alert type, nothing special to set
                 }
