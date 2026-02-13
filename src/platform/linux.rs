@@ -8,7 +8,7 @@ use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webkit2gtk::{ScriptDialogType, UserContentManagerExt, WebViewExt};
 
-use crate::platform::alert_state::{alert_state, AlertType, PendingAlert};
+use crate::platform::alert_state::{AlertStateManager, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
@@ -39,8 +39,13 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     use crate::platform::alert_state::AlertResponse;
     use webkit2gtk::WebViewExt as _;
 
-    let _ = webview.with_webview(|webview| {
+    // Get per-window alert state from the manager
+    let manager = webview.app_handle().state::<AlertStateManager>();
+    let alert_state = manager.get_or_create(webview.label());
+
+    let _ = webview.with_webview(move |webview| {
         let webview = webview.inner().clone();
+        let alert_state = alert_state.clone();
 
         // Connect to the script-dialog signal to intercept JS dialogs
         webview.connect_script_dialog(move |_webview, dialog| {
@@ -71,7 +76,7 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
 
             // Create channel for WebDriver response
             let (tx, rx) = std::sync::mpsc::channel::<AlertResponse>();
-            alert_state().set_pending(PendingAlert {
+            alert_state.set_pending(PendingAlert {
                 message: message.clone(),
                 default_text: default_text.clone(),
                 alert_type,
