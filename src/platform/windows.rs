@@ -675,42 +675,42 @@ mod handlers {
             };
 
             // Spawn thread to wait for WebDriver response (don't block UI thread)
-            // This is outside the unsafe block so inner unsafe blocks are not nested
             std::thread::spawn(move || {
                 let timeout = std::time::Duration::from_secs(30);
                 let response = rx.recv_timeout(timeout);
 
-                // Reconstruct COM objects from raw pointers
                 // SAFETY: These pointers came from valid COM objects and we're
-                // accessing them from a single thread
-                let args = unsafe {
-                    ICoreWebView2ScriptDialogOpeningEventArgs::from_raw(args_ptr.as_ptr())
-                };
-                let deferral = unsafe { ICoreWebView2Deferral::from_raw(deferral_ptr.as_ptr()) };
+                // accessing them from a single thread. All COM method calls are unsafe.
+                unsafe {
+                    let args =
+                        ICoreWebView2ScriptDialogOpeningEventArgs::from_raw(args_ptr.as_ptr());
+                    let deferral = ICoreWebView2Deferral::from_raw(deferral_ptr.as_ptr());
 
-                match response {
-                    Ok(AlertResponse {
-                        accepted,
-                        prompt_text,
-                    }) => {
-                        if accepted {
-                            // Set prompt text if provided
-                            if let Some(text) = prompt_text {
-                                let result = windows::core::HSTRING::from(text.as_str());
-                                let _ = args.SetResultText(windows::core::PCWSTR(result.as_ptr()));
+                    match response {
+                        Ok(AlertResponse {
+                            accepted,
+                            prompt_text,
+                        }) => {
+                            if accepted {
+                                // Set prompt text if provided
+                                if let Some(text) = prompt_text {
+                                    let result = windows::core::HSTRING::from(text.as_str());
+                                    let _ =
+                                        args.SetResultText(windows::core::PCWSTR(result.as_ptr()));
+                                }
+                                let _ = args.Accept();
                             }
+                            // If not accepted, don't call Accept() - dialog returns false/null
+                        }
+                        Err(_) => {
+                            // Timeout - auto-accept
                             let _ = args.Accept();
                         }
-                        // If not accepted, don't call Accept() - dialog returns false/null
                     }
-                    Err(_) => {
-                        // Timeout - auto-accept
-                        let _ = args.Accept();
-                    }
-                }
 
-                // Complete the deferral to let WebView2 continue
-                let _ = deferral.Complete();
+                    // Complete the deferral to let WebView2 continue
+                    let _ = deferral.Complete();
+                }
             });
 
             Ok(())
