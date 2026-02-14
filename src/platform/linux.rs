@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
 use glib::MainContext;
-use gtk::prelude::*;
+use gtk::prelude::{PageSetupExt, PrintSettingsExt};
 use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
@@ -243,7 +243,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // =========================================================================
 
     async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel::<Result<(), String>>();
 
         // Create temp directory for PDF output
         let temp_dir = tempfile::TempDir::new().map_err(|e| {
@@ -328,14 +328,18 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
 
         // Wait for completion
         let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
-        let print_result = match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(Ok(()))) => Ok(()),
-            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
-            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => {
+                return Err(WebDriverErrorResponse::unknown_error(&error));
+            }
+            Ok(Err(_)) => {
+                return Err(WebDriverErrorResponse::unknown_error("Channel closed"));
+            }
+            Err(_) => {
+                return Err(WebDriverErrorResponse::script_timeout());
+            }
         };
-
-        print_result?;
 
         // Read the PDF file
         let pdf_data = std::fs::read(&pdf_path).map_err(|e| {
