@@ -35,6 +35,7 @@ block2 = "0.6"
 webview2-com = "0.38"
 windows = { version = "0.61", features = ["Win32_System_Com", "Win32_System_WinRT"] }
 windows-core = "0.61"
+tempfile = "3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"

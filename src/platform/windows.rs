@@ -1,15 +1,20 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2ExecuteScriptCompletedHandler,
-    ICoreWebView2ScriptDialogOpeningEventHandler, ICoreWebView2WebMessageReceivedEventHandler,
+    ICoreWebView2, ICoreWebView2Environment6, ICoreWebView2ExecuteScriptCompletedHandler,
+    ICoreWebView2PrintToPdfCompletedHandler, ICoreWebView2ScriptDialogOpeningEventHandler,
+    ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2_7,
+    COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE, COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT,
 };
-use windows::core::{HSTRING, PCWSTR};
+use windows::core::{Interface, HSTRING, PCWSTR};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
+use windows_core::BOOL;
 
 use crate::platform::alert_state::{AlertState, AlertStateManager, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
@@ -233,11 +238,182 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
     // Print
     // =========================================================================
 
-    async fn print_page(&self, _options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement PDF printing using WebView2's PrintToPdf API
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "PDF printing not yet implemented for Windows",
-        ))
+    async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
+        let (tx, rx) = oneshot::channel();
+        let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+
+        // Create temp file for PDF output (auto-cleanup on drop)
+        let temp_file = tempfile::Builder::new()
+            .prefix("webdriver_print_")
+            .suffix(".pdf")
+            .tempfile()
+            .map_err(|e| {
+                WebDriverErrorResponse::unknown_error(&format!("Failed to create temp file: {e}"))
+            })?;
+        let pdf_path = temp_file.path().to_path_buf();
+        let pdf_path_clone = pdf_path.clone();
+
+        // Extract options before moving into closure
+        let orientation = options.orientation.clone();
+        let scale = options.scale;
+        let background = options.background;
+        let page_width = options.page_width;
+        let page_height = options.page_height;
+        let margin_top = options.margin_top;
+        let margin_bottom = options.margin_bottom;
+        let margin_left = options.margin_left;
+        let margin_right = options.margin_right;
+
+        let result = self.window.with_webview(move |webview| unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+            let webview2 = match webview.controller().CoreWebView2() {
+                Ok(wv) => wv,
+                Err(e) => {
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(Err(format!("Failed to get CoreWebView2: {e:?}")));
+                        }
+                    }
+                    return;
+                }
+            };
+
+            // Cast to ICoreWebView2_7 for PrintToPdf support
+            let webview7: ICoreWebView2_7 = match webview2.cast() {
+                Ok(wv) => wv,
+                Err(e) => {
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ =
+                                tx.send(Err(format!("Failed to cast to ICoreWebView2_7: {e:?}")));
+                        }
+                    }
+                    return;
+                }
+            };
+
+            // Get environment to create print settings
+            let environment = match webview7.Environment() {
+                Ok(env) => env,
+                Err(e) => {
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(Err(format!("Failed to get environment: {e:?}")));
+                        }
+                    }
+                    return;
+                }
+            };
+
+            // Cast to ICoreWebView2Environment6 for CreatePrintSettings
+            let env6: ICoreWebView2Environment6 = match environment.cast() {
+                Ok(env) => env,
+                Err(e) => {
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(Err(format!(
+                                "Failed to cast to ICoreWebView2Environment6: {e:?}"
+                            )));
+                        }
+                    }
+                    return;
+                }
+            };
+
+            // Create print settings
+            let settings = match env6.CreatePrintSettings() {
+                Ok(s) => s,
+                Err(e) => {
+                    if let Ok(mut guard) = tx.lock() {
+                        if let Some(tx) = guard.take() {
+                            let _ = tx.send(Err(format!("Failed to create print settings: {e:?}")));
+                        }
+                    }
+                    return;
+                }
+            };
+
+            // Apply print options
+            // Orientation
+            if let Some(ref orient) = orientation {
+                let orientation_val = if orient == "landscape" {
+                    COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE
+                } else {
+                    COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT
+                };
+                let _ = settings.SetOrientation(orientation_val);
+            }
+
+            // Scale factor (1.0 = 100%)
+            if let Some(s) = scale {
+                let _ = settings.SetScaleFactor(s);
+            }
+
+            // Print backgrounds
+            if let Some(bg) = background {
+                let _ = settings.SetShouldPrintBackgrounds(bg);
+            }
+
+            // Page dimensions (WebDriver uses cm, WebView2 uses inches)
+            // 1 inch = 2.54 cm
+            if let Some(w) = page_width {
+                let _ = settings.SetPageWidth(w / 2.54);
+            }
+            if let Some(h) = page_height {
+                let _ = settings.SetPageHeight(h / 2.54);
+            }
+
+            // Margins (WebDriver uses cm, WebView2 uses inches)
+            if let Some(m) = margin_top {
+                let _ = settings.SetMarginTop(m / 2.54);
+            }
+            if let Some(m) = margin_bottom {
+                let _ = settings.SetMarginBottom(m / 2.54);
+            }
+            if let Some(m) = margin_left {
+                let _ = settings.SetMarginLeft(m / 2.54);
+            }
+            if let Some(m) = margin_right {
+                let _ = settings.SetMarginRight(m / 2.54);
+            }
+
+            // Create completion handler
+            let handler: ICoreWebView2PrintToPdfCompletedHandler =
+                handlers::PrintToPdfHandler::new(tx).into();
+
+            // Convert path to HSTRING
+            let path_str = pdf_path_clone.to_string_lossy().to_string();
+            let path_hstring = HSTRING::from(&path_str);
+
+            // Call PrintToPdf
+            if let Err(e) = webview7.PrintToPdf(&path_hstring, &settings, &handler) {
+                tracing::error!("PrintToPdf call failed: {e:?}");
+            }
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
+        }
+
+        // Wait for completion
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+        let print_result = match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        };
+
+        // Check if print succeeded
+        print_result?;
+
+        // Read the PDF file (temp_file auto-cleans on drop)
+        let pdf_data = std::fs::read(&pdf_path).map_err(|e| {
+            WebDriverErrorResponse::unknown_error(&format!("Failed to read PDF file: {e}"))
+        })?;
+
+        Ok(BASE64_STANDARD.encode(&pdf_data))
     }
 
     // =========================================================================
@@ -384,6 +560,7 @@ impl<R: Runtime + 'static> WindowsExecutor<R> {
 
 type ScriptResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<Value, String>>>>>;
 type CaptureResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>;
+type PrintResultSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<(), String>>>>>;
 
 mod handlers {
     #![allow(clippy::inline_always, clippy::ref_as_ptr)]
@@ -393,7 +570,8 @@ mod handlers {
         ICoreWebView2, ICoreWebView2CapturePreviewCompletedHandler,
         ICoreWebView2CapturePreviewCompletedHandler_Impl, ICoreWebView2Deferral,
         ICoreWebView2ExecuteScriptCompletedHandler,
-        ICoreWebView2ExecuteScriptCompletedHandler_Impl, ICoreWebView2ScriptDialogOpeningEventArgs,
+        ICoreWebView2ExecuteScriptCompletedHandler_Impl, ICoreWebView2PrintToPdfCompletedHandler,
+        ICoreWebView2PrintToPdfCompletedHandler_Impl, ICoreWebView2ScriptDialogOpeningEventArgs,
         ICoreWebView2ScriptDialogOpeningEventHandler,
         ICoreWebView2ScriptDialogOpeningEventHandler_Impl,
         ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2WebMessageReceivedEventHandler,
@@ -404,7 +582,7 @@ mod handlers {
 
     use super::{
         AlertState, AlertType, AsyncScriptState, CaptureResultSender, PendingAlert,
-        ScriptResultSender, SendableComPtr, HANDLER_NAME,
+        PrintResultSender, ScriptResultSender, SendableComPtr, HANDLER_NAME,
     };
     use crate::platform::alert_state::AlertResponse;
     use std::sync::Arc;
@@ -463,6 +641,41 @@ mod handlers {
             } else {
                 // In a full implementation, we'd read the IStream here
                 Ok(String::new())
+            };
+
+            if let Ok(mut guard) = self.tx.lock() {
+                if let Some(tx) = guard.take() {
+                    let _ = tx.send(response);
+                }
+            }
+            Ok(())
+        }
+    }
+
+    /// Handler for PDF printing completion
+    #[implement(ICoreWebView2PrintToPdfCompletedHandler)]
+    pub struct PrintToPdfHandler {
+        pub tx: PrintResultSender,
+    }
+
+    impl PrintToPdfHandler {
+        pub fn new(tx: PrintResultSender) -> Self {
+            Self { tx }
+        }
+    }
+
+    impl ICoreWebView2PrintToPdfCompletedHandler_Impl for PrintToPdfHandler_Impl {
+        fn Invoke(
+            &self,
+            errorcode: windows::core::HRESULT,
+            issuccessful: super::BOOL,
+        ) -> windows::core::Result<()> {
+            let response = if errorcode.is_err() {
+                Err(format!("PrintToPdf failed: {errorcode:?}"))
+            } else if !issuccessful.as_bool() {
+                Err("PrintToPdf was not successful".to_string())
+            } else {
+                Ok(())
             };
 
             if let Ok(mut guard) = self.tx.lock() {
