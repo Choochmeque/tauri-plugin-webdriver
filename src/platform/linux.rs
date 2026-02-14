@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
 use glib::MainContext;
-use gtk::prelude::{PageSetupExt, PrintSettingsExt};
 use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
