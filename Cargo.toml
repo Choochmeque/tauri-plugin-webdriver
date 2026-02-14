@@ -41,7 +41,7 @@ windows-core = "0.61"
 webkit2gtk = "2.0"
 javascriptcore-rs = "1.1"
 glib = "0.21"
-gtk = "0.21"
+gtk = "0.18"
 
 [build-dependencies]
 tauri-plugin = { version = "2.5.3", features = ["build"] }
