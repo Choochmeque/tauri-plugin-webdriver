@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use glib::MainContext;
+use gtk::prelude::*;
 use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webkit2gtk::{ScriptDialogType, UserContentManagerExt, WebViewExt};
+use webkit2gtk::{PrintOperationExt, ScriptDialogType, UserContentManagerExt, WebViewExt};
 
 use crate::platform::alert_state::{AlertStateManager, AlertType, PendingAlert};
 use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
@@ -239,11 +242,107 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // Print
     // =========================================================================
 
-    async fn print_page(&self, _options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement PDF printing using WebKitGTK's print operation
-        Err(WebDriverErrorResponse::unsupported_operation(
-            "PDF printing not yet implemented for Linux",
-        ))
+    async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
+        let (tx, rx) = oneshot::channel();
+
+        // Create temp directory for PDF output
+        let temp_dir = tempfile::TempDir::new().map_err(|e| {
+            WebDriverErrorResponse::unknown_error(&format!("Failed to create temp dir: {e}"))
+        })?;
+        let pdf_path = temp_dir.path().join("print.pdf");
+        let pdf_path_clone = pdf_path.clone();
+
+        // Extract options before moving into closure
+        let orientation = options.orientation.clone();
+        let page_width = options.page_width;
+        let page_height = options.page_height;
+        let margin_top = options.margin_top;
+        let margin_bottom = options.margin_bottom;
+        let margin_left = options.margin_left;
+        let margin_right = options.margin_right;
+
+        let result = self.window.with_webview(move |webview| {
+            let webview = webview.inner().clone();
+
+            // Create print operation
+            let print_op = webkit2gtk::PrintOperation::new(&webview);
+
+            // Create page setup
+            let page_setup = gtk::PageSetup::new();
+
+            // Page size (cm to points: 1 cm = 28.35 points)
+            let width_points = page_width.unwrap_or(21.0) * 28.35;
+            let height_points = page_height.unwrap_or(29.7) * 28.35;
+            let paper_size = gtk::PaperSize::new_custom(
+                "custom",
+                "Custom",
+                width_points,
+                height_points,
+                gtk::Unit::Points,
+            );
+            page_setup.set_paper_size(&paper_size);
+
+            // Orientation
+            if orientation.as_deref() == Some("landscape") {
+                page_setup.set_orientation(gtk::PageOrientation::Landscape);
+            } else {
+                page_setup.set_orientation(gtk::PageOrientation::Portrait);
+            }
+
+            // Margins (cm to points)
+            page_setup.set_top_margin(margin_top.unwrap_or(1.0) * 28.35, gtk::Unit::Points);
+            page_setup.set_bottom_margin(margin_bottom.unwrap_or(1.0) * 28.35, gtk::Unit::Points);
+            page_setup.set_left_margin(margin_left.unwrap_or(1.0) * 28.35, gtk::Unit::Points);
+            page_setup.set_right_margin(margin_right.unwrap_or(1.0) * 28.35, gtk::Unit::Points);
+
+            print_op.set_page_setup(&page_setup);
+
+            // Print settings for PDF output
+            let settings = gtk::PrintSettings::new();
+            settings.set_printer("Print to File");
+            settings.set(
+                gtk::PRINT_SETTINGS_OUTPUT_URI,
+                Some(&format!("file://{}", pdf_path_clone.display())),
+            );
+            settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT, Some("pdf"));
+
+            print_op.set_print_settings(&settings);
+
+            // Connect to finished signal
+            let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+            print_op.connect_finished(move |_op| {
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(Ok(()));
+                    }
+                }
+            });
+
+            // Run print operation (silent, no dialog)
+            let _ = print_op.print();
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
+        }
+
+        // Wait for completion
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+        let print_result = match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        };
+
+        print_result?;
+
+        // Read the PDF file
+        let pdf_data = std::fs::read(&pdf_path).map_err(|e| {
+            WebDriverErrorResponse::unknown_error(&format!("Failed to read PDF file: {e}"))
+        })?;
+
+        Ok(BASE64_STANDARD.encode(&pdf_data))
     }
 
     // =========================================================================
