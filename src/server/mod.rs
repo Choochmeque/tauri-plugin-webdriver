@@ -57,6 +57,11 @@ pub fn start<R: Runtime + 'static>(app: AppHandle<R>, port: u16) {
             let state = Arc::new(AppState::new(app));
             let router = router::create_router(state);
 
+            // On Android, bind to all interfaces for WiFi accessibility
+            // On other platforms, bind to localhost only for security
+            #[cfg(target_os = "android")]
+            let addr = SocketAddr::from(([0, 0, 0, 0], port));
+            #[cfg(not(target_os = "android"))]
             let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
             tracing::info!("WebDriver server listening on http://{}", addr);

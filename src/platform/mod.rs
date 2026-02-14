@@ -15,6 +15,9 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
 
+#[cfg(target_os = "android")]
+mod android;
+
 use std::sync::Arc;
 use tauri::{Runtime, WebviewWindow};
 
@@ -54,6 +57,20 @@ pub fn create_executor<R: Runtime + 'static>(
     Arc::new(linux::LinuxExecutor::new(window, timeouts, frame_context))
 }
 
+/// Create a platform-specific executor for the given window
+#[cfg(target_os = "android")]
+pub fn create_executor<R: Runtime + 'static>(
+    window: WebviewWindow<R>,
+    timeouts: Timeouts,
+    frame_context: Vec<FrameId>,
+) -> Arc<dyn PlatformExecutor<R>> {
+    Arc::new(android::AndroidExecutor::new(
+        window,
+        timeouts,
+        frame_context,
+    ))
+}
+
 /// Register platform-specific webview handlers at webview creation time.
 /// This is called from the plugin's `on_webview_ready` hook.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
@@ -63,4 +80,6 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     macos::register_webview_handlers(webview);
     #[cfg(target_os = "linux")]
     linux::register_webview_handlers(webview);
+    #[cfg(target_os = "android")]
+    android::register_webview_handlers(webview);
 }

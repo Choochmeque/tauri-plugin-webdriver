@@ -8,6 +8,15 @@ const __dirname = dirname(__filename);
 
 let appProcess: ChildProcess | null = null;
 
+type Platform = 'desktop' | 'android' | 'ios';
+
+function getPlatform(): Platform {
+  const env = process.env.TAURI_TEST_PLATFORM;
+  if (env === 'android') return 'android';
+  if (env === 'ios') return 'ios';
+  return 'desktop';
+}
+
 export function getAppPath(): string {
   const base = resolve(__dirname, '../../src-tauri/target/release');
 
@@ -65,9 +74,18 @@ async function waitForServer(port: number, timeout: number = 30000): Promise<voi
   throw new Error(`WebDriver server did not start within ${timeout}ms`);
 }
 
-export async function startApp(port: number = 4445): Promise<ChildProcess> {
-  const appPath = getAppPath();
+export async function startApp(port: number = 4445): Promise<ChildProcess | null> {
+  const platform = getPlatform();
 
+  if (platform !== 'desktop') {
+    // Mobile - just wait for server, user handles app lifecycle
+    console.log(`Waiting for ${platform} app on port ${port}...`);
+    await waitForServer(port);
+    return null;
+  }
+
+  // Desktop - spawn app
+  const appPath = getAppPath();
   console.log(`Starting Tauri app: ${appPath}`);
 
   appProcess = spawn(appPath, [], {
@@ -101,6 +119,11 @@ export async function startApp(port: number = 4445): Promise<ChildProcess> {
 }
 
 export function stopApp(): void {
+  if (getPlatform() !== 'desktop') {
+    // Mobile - nothing to do, user handles app lifecycle
+    return;
+  }
+
   if (appProcess) {
     console.log('Stopping Tauri app...');
     appProcess.kill('SIGTERM');

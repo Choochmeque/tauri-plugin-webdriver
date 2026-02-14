@@ -1330,6 +1330,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     // =========================================================================
 
     /// Get window rectangle (position and size)
+    #[cfg(desktop)]
     async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         if let Ok(position) = self.window().outer_position() {
             if let Ok(size) = self.window().outer_size() {
@@ -1345,6 +1346,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Set window rectangle (position and size)
+    #[cfg(desktop)]
     async fn set_window_rect(
         &self,
         rect: WindowRect,
@@ -1388,6 +1390,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Maximize window
+    #[cfg(desktop)]
     async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         let _ = self.window().maximize();
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -1395,16 +1398,51 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
     }
 
     /// Minimize window
+    #[cfg(desktop)]
     async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
         let _ = self.window().minimize();
         Ok(())
     }
 
     /// Set window to fullscreen
+    #[cfg(desktop)]
     async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         let _ = self.window().set_fullscreen(true);
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         self.get_window_rect().await
+    }
+
+    /// Get window rectangle (mobile no-op)
+    #[cfg(mobile)]
+    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        Ok(WindowRect::default())
+    }
+
+    /// Set window rectangle (mobile no-op)
+    #[cfg(mobile)]
+    async fn set_window_rect(
+        &self,
+        _rect: WindowRect,
+    ) -> Result<WindowRect, WebDriverErrorResponse> {
+        Ok(WindowRect::default())
+    }
+
+    /// Maximize window (mobile no-op)
+    #[cfg(mobile)]
+    async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        Ok(WindowRect::default())
+    }
+
+    /// Minimize window (mobile no-op)
+    #[cfg(mobile)]
+    async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
+        Ok(())
+    }
+
+    /// Set window to fullscreen (mobile no-op)
+    #[cfg(mobile)]
+    async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+        Ok(WindowRect::default())
     }
 
     // =========================================================================

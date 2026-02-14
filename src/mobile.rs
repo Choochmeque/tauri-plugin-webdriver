@@ -13,11 +13,11 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     api: PluginApi<R, C>,
 ) -> crate::Result<Webdriver<R>> {
     #[cfg(target_os = "android")]
-    let handle = api.register_android_plugin("", "ExamplePlugin")?;
+    let handle = api.register_android_plugin("com.plugin.webdriver", "WebDriverPlugin")?;
     #[cfg(target_os = "ios")]
     let handle = api.register_ios_plugin(init_plugin_webdriver)?;
     Ok(Webdriver(handle))
 }
 
 /// Access to the webdriver APIs.
-pub struct Webdriver<R: Runtime>(PluginHandle<R>);
+pub struct Webdriver<R: Runtime>(pub PluginHandle<R>);
