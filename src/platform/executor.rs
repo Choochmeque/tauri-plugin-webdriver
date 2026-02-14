@@ -1349,12 +1349,40 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         &self,
         rect: WindowRect,
     ) -> Result<WindowRect, WebDriverErrorResponse> {
+        // Exit fullscreen/maximized state before setting rect
+        // Otherwise the window manager may ignore our size/position request
+        if self.window().is_fullscreen().unwrap_or(false) {
+            let _ = self.window().set_fullscreen(false);
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        if self.window().is_maximized().unwrap_or(false) {
+            let _ = self.window().unmaximize();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
         let _ = self
             .window()
             .set_position(PhysicalPosition::new(rect.x, rect.y));
+
+        // Calculate chrome/decoration size to set outer size correctly
+        // On Windows/Linux, set_size sets inner size, but we want to set outer size
+        let (chrome_width, chrome_height) = if let (Ok(outer), Ok(inner)) =
+            (self.window().outer_size(), self.window().inner_size())
+        {
+            (
+                outer.width.saturating_sub(inner.width),
+                outer.height.saturating_sub(inner.height),
+            )
+        } else {
+            (0, 0)
+        };
+
+        // Set inner size = requested outer size - chrome
+        let inner_width = rect.width.saturating_sub(chrome_width);
+        let inner_height = rect.height.saturating_sub(chrome_height);
         let _ = self
             .window()
-            .set_size(PhysicalSize::new(rect.width, rect.height));
+            .set_size(PhysicalSize::new(inner_width, inner_height));
 
         self.get_window_rect().await
     }
