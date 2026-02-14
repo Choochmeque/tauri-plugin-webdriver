@@ -10,8 +10,8 @@ use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOn
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
 use objc2_foundation::{NSData, NSDictionary, NSError, NSObject, NSObjectProtocol, NSString};
 use objc2_web_kit::{
-    WKFrameInfo, WKScriptMessage, WKScriptMessageHandler, WKSnapshotConfiguration, WKUIDelegate,
-    WKUserContentController, WKWebView,
+    WKFrameInfo, WKPDFConfiguration, WKScriptMessage, WKScriptMessageHandler,
+    WKSnapshotConfiguration, WKUIDelegate, WKUserContentController, WKWebView,
 };
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
@@ -368,11 +368,101 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
     // Print
     // =========================================================================
 
-    async fn print_page(&self, _options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
-        // TODO: Implement PDF printing with WKWebView's createPDFWithConfiguration
-        Err(WebDriverErrorResponse::unknown_error(
-            "PDF printing not yet implemented",
-        ))
+    async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
+        // First, inject CSS @page rules for print settings
+        let page_width = options.page_width.unwrap_or(21.0);
+        let page_height = options.page_height.unwrap_or(29.7);
+        let margin_top = options.margin_top.unwrap_or(1.0);
+        let margin_bottom = options.margin_bottom.unwrap_or(1.0);
+        let margin_left = options.margin_left.unwrap_or(1.0);
+        let margin_right = options.margin_right.unwrap_or(1.0);
+        let orientation = options.orientation.as_deref().unwrap_or("portrait");
+
+        // Inject @page CSS rules
+        let css_script = format!(
+            r"(function() {{
+                var style = document.createElement('style');
+                style.id = '__webdriver_print_style';
+                style.textContent = `
+                    @page {{
+                        size: {page_width}cm {page_height}cm {orientation};
+                        margin: {margin_top}cm {margin_right}cm {margin_bottom}cm {margin_left}cm;
+                    }}
+                    @media print {{
+                        body {{
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }}
+                    }}
+                `;
+                document.head.appendChild(style);
+                return true;
+            }})()"
+        );
+        self.evaluate_js(&css_script).await?;
+
+        // Now create PDF using WKWebView's native API
+        let (tx, rx) = oneshot::channel();
+
+        let result = self.window.with_webview(move |webview| unsafe {
+            let wk_webview: &WKWebView = &*webview.inner().cast();
+            let mtm = MainThreadMarker::new_unchecked();
+
+            // Create PDF configuration
+            let config = WKPDFConfiguration::new(mtm);
+            // Note: WKPDFConfiguration only has rect and allowTransparentBackground
+            // Page size/margins are handled via CSS @page rules above
+
+            let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+            let block = RcBlock::new(move |data: *mut NSData, error: *mut NSError| {
+                let response = if !error.is_null() {
+                    let error_ref = &*error;
+                    let description = error_ref.localizedDescription();
+                    Err(description.to_string())
+                } else if data.is_null() {
+                    Err("No PDF data returned".to_string())
+                } else {
+                    let data_ref = &*data;
+                    let bytes = data_ref.to_vec();
+                    Ok(bytes)
+                };
+
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(response);
+                    }
+                }
+            });
+
+            wk_webview.createPDFWithConfiguration_completionHandler(Some(&config), &block);
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
+        }
+
+        // Wait for result
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+        let pdf_result = match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(bytes))) => Ok(bytes),
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        };
+
+        // Clean up injected style
+        let _ = self
+            .evaluate_js(
+                r"(function() {
+                var style = document.getElementById('__webdriver_print_style');
+                if (style) style.remove();
+                return true;
+            })()",
+            )
+            .await;
+
+        // Return base64 encoded PDF
+        pdf_result.map(|bytes| BASE64_STANDARD.encode(&bytes))
     }
 }
 
