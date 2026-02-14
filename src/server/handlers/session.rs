@@ -59,6 +59,17 @@ fn parse_user_agent(user_agent: &str) -> (String, String) {
         return ("msedge".to_string(), version.to_string());
     }
 
+    // Android WebView: "... (Linux; Android 14; ...) AppleWebKit/... Chrome/120.0.0.0 ..."
+    // Must check before Linux since Android UA contains "Linux"
+    if user_agent.contains("Android") {
+        let version = user_agent
+            .split("Chrome/")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .unwrap_or("unknown");
+        return ("chrome".to_string(), version.to_string());
+    }
+
     // Linux WebKitGTK: "... (X11; Linux ...) AppleWebKit/... Version/2.44..."
     if user_agent.contains("Linux") || user_agent.contains("X11") {
         let version = user_agent
