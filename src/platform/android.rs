@@ -122,7 +122,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: JsResult = webdriver
             .0
-            .run_mobile_plugin("evaluateJs", args)
+            .run_mobile_plugin_async("evaluateJs", args)
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         if result.success {
@@ -201,7 +202,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: JsResult = webdriver
             .0
-            .run_mobile_plugin("executeAsyncScript", plugin_args)
+            .run_mobile_plugin_async("executeAsyncScript", plugin_args)
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         if result.success {
@@ -232,7 +234,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: JsResult = webdriver
             .0
-            .run_mobile_plugin("takeScreenshot", args)
+            .run_mobile_plugin_async("takeScreenshot", args)
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         if result.success {
@@ -290,7 +293,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: JsResult = webdriver
             .0
-            .run_mobile_plugin("printToPdf", args)
+            .run_mobile_plugin_async("printToPdf", args)
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         if result.success {
@@ -332,7 +336,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let _result: Value = webdriver
             .0
-            .run_mobile_plugin("dispatchTouch", args)
+            .run_mobile_plugin_async("dispatchTouch", args)
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         Ok(())
@@ -344,7 +349,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: AlertResult = webdriver
             .0
-            .run_mobile_plugin("getAlertText", ())
+            .run_mobile_plugin_async("getAlertText", ())
+            .await
             .map_err(|e| {
                 if e.to_string().contains("no such alert") {
                     WebDriverErrorResponse::no_such_alert()
@@ -363,7 +369,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let _result: Value = webdriver
             .0
-            .run_mobile_plugin("acceptAlert", ())
+            .run_mobile_plugin_async("acceptAlert", ())
+            .await
             .map_err(|e| {
                 if e.to_string().contains("no such alert") {
                     WebDriverErrorResponse::no_such_alert()
@@ -380,7 +387,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let _result: Value = webdriver
             .0
-            .run_mobile_plugin("dismissAlert", ())
+            .run_mobile_plugin_async("dismissAlert", ())
+            .await
             .map_err(|e| {
                 if e.to_string().contains("no such alert") {
                     WebDriverErrorResponse::no_such_alert()
@@ -403,12 +411,13 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let _result: Value = webdriver
             .0
-            .run_mobile_plugin(
+            .run_mobile_plugin_async(
                 "sendAlertText",
                 SendAlertTextArgs {
                     prompt_text: text.to_string(),
                 },
             )
+            .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("no such alert") {
@@ -594,7 +603,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
 
         let result: ViewportResult = webdriver
             .0
-            .run_mobile_plugin("getViewportSize", ())
+            .run_mobile_plugin_async("getViewportSize", ())
+            .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         Ok(WindowRect {

@@ -6,6 +6,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.webkit.JavascriptInterface
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -81,9 +84,75 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
     override fun load(webView: WebView) {
         this.webView = webView
 
-        // Add JavaScript interface for async script callbacks
         mainHandler.post {
+            // Add JavaScript interface for async script callbacks
             webView.addJavascriptInterface(AsyncScriptBridge(), "__webdriver_bridge")
+
+            // Wrap existing WebChromeClient to intercept alerts
+            val existingClient = webView.webChromeClient
+            webView.webChromeClient = WebDriverChromeClient(existingClient)
+        }
+    }
+
+    /**
+     * WebChromeClient wrapper that intercepts JS dialogs
+     */
+    inner class WebDriverChromeClient(
+        private val delegate: WebChromeClient?
+    ) : WebChromeClient() {
+
+        override fun onJsAlert(
+            view: WebView,
+            url: String,
+            message: String,
+            result: JsResult
+        ): Boolean {
+            setPendingAlert(message, null, "alert") { accepted, _ ->
+                if (accepted) result.confirm() else result.cancel()
+            }
+            return true
+        }
+
+        override fun onJsConfirm(
+            view: WebView,
+            url: String,
+            message: String,
+            result: JsResult
+        ): Boolean {
+            setPendingAlert(message, null, "confirm") { accepted, _ ->
+                if (accepted) result.confirm() else result.cancel()
+            }
+            return true
+        }
+
+        override fun onJsPrompt(
+            view: WebView,
+            url: String,
+            message: String,
+            defaultValue: String?,
+            result: JsPromptResult
+        ): Boolean {
+            setPendingAlert(message, defaultValue, "prompt") { accepted, promptText ->
+                if (accepted) {
+                    result.confirm(promptText ?: defaultValue ?: "")
+                } else {
+                    result.cancel()
+                }
+            }
+            return true
+        }
+
+        // Delegate other methods to existing client
+        override fun onProgressChanged(view: WebView, newProgress: Int) {
+            delegate?.onProgressChanged(view, newProgress)
+        }
+
+        override fun onReceivedTitle(view: WebView, title: String?) {
+            delegate?.onReceivedTitle(view, title)
+        }
+
+        override fun onReceivedIcon(view: WebView, icon: android.graphics.Bitmap?) {
+            delegate?.onReceivedIcon(view, icon)
         }
     }
 
