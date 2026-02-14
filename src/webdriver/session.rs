@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use uuid::Uuid;
@@ -6,6 +6,15 @@ use uuid::Uuid;
 use super::element::ElementStore;
 use crate::platform::FrameId;
 use crate::server::response::WebDriverErrorResponse;
+
+/// Tracks currently pressed keys and pointer buttons for action state
+#[derive(Debug, Default, Clone)]
+pub struct ActionState {
+    /// Currently pressed keyboard keys (`WebDriver` key codes)
+    pub pressed_keys: HashSet<String>,
+    /// Currently pressed pointer buttons by source ID
+    pub pressed_buttons: HashMap<String, HashSet<u32>>,
+}
 
 /// Session timeouts configuration
 #[derive(Debug, Clone, Serialize)]
@@ -42,6 +51,8 @@ pub struct Session {
     pub current_window: String,
     /// Current frame context (stack of frame selectors)
     pub frame_context: Vec<FrameId>,
+    /// Action state tracking for pressed keys/buttons
+    pub action_state: ActionState,
 }
 
 impl Session {
@@ -52,6 +63,7 @@ impl Session {
             elements: ElementStore::new(),
             current_window: initial_window,
             frame_context: Vec::new(),
+            action_state: ActionState::default(),
         }
     }
 }

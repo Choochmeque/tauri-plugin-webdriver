@@ -7,6 +7,7 @@ use tauri::Runtime;
 
 use crate::server::response::{WebDriverResponse, WebDriverResult};
 use crate::server::AppState;
+use crate::webdriver::ActionState;
 
 #[derive(Debug, Deserialize)]
 pub struct NavigateRequest {
@@ -19,11 +20,13 @@ pub async fn navigate<R: Runtime + 'static>(
     Path(session_id): Path<String>,
     Json(request): Json<NavigateRequest>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     let frame_context = session.frame_context.clone();
+    // Clear action state on navigation
+    session.action_state = ActionState::default();
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
@@ -71,11 +74,13 @@ pub async fn back<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     let frame_context = session.frame_context.clone();
+    // Clear action state on navigation
+    session.action_state = ActionState::default();
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
@@ -88,11 +93,13 @@ pub async fn forward<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     let frame_context = session.frame_context.clone();
+    // Clear action state on navigation
+    session.action_state = ActionState::default();
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
@@ -105,11 +112,13 @@ pub async fn refresh<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
+    let mut sessions = state.sessions.write().await;
+    let session = sessions.get_mut(&session_id)?;
     let current_window = session.current_window.clone();
     let timeouts = session.timeouts.clone();
     let frame_context = session.frame_context.clone();
+    // Clear action state on navigation
+    session.action_state = ActionState::default();
     drop(sessions);
 
     let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;

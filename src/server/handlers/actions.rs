@@ -25,8 +25,7 @@ pub enum ActionSequence {
     },
     #[serde(rename = "pointer")]
     Pointer {
-        #[serde(rename = "id")]
-        _id: String,
+        id: String,
         actions: Vec<PointerAction>,
     },
     #[serde(rename = "wheel")]
@@ -109,12 +108,16 @@ pub async fn perform<R: Runtime + 'static>(
     Path(session_id): Path<String>,
     Json(request): Json<ActionsRequest>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let session = sessions.get(&session_id)?;
-    let current_window = session.current_window.clone();
-    let timeouts = session.timeouts.clone();
-    let frame_context = session.frame_context.clone();
-    drop(sessions);
+    // Get session info and executor first
+    let (current_window, timeouts, frame_context) = {
+        let sessions = state.sessions.read().await;
+        let session = sessions.get(&session_id)?;
+        (
+            session.current_window.clone(),
+            session.timeouts.clone(),
+            session.frame_context.clone(),
+        )
+    };
 
     let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
     let mut pointer_state = PointerState { x: 0, y: 0 };
@@ -122,7 +125,7 @@ pub async fn perform<R: Runtime + 'static>(
 
     for action_seq in &request.actions {
         match action_seq {
-            ActionSequence::Key { actions, .. } => {
+            ActionSequence::Key { _id: _, actions } => {
                 for action in actions {
                     match action {
                         KeyAction::KeyDown { value } => {
@@ -130,12 +133,22 @@ pub async fn perform<R: Runtime + 'static>(
                             executor
                                 .dispatch_key_event(value, true, &modifier_state)
                                 .await?;
+                            // Track pressed key
+                            let mut sessions = state.sessions.write().await;
+                            if let Ok(session) = sessions.get_mut(&session_id) {
+                                session.action_state.pressed_keys.insert(value.clone());
+                            }
                         }
                         KeyAction::KeyUp { value } => {
                             executor
                                 .dispatch_key_event(value, false, &modifier_state)
                                 .await?;
                             modifier_state.update(value, false);
+                            // Remove from tracked keys
+                            let mut sessions = state.sessions.write().await;
+                            if let Ok(session) = sessions.get_mut(&session_id) {
+                                session.action_state.pressed_keys.remove(value);
+                            }
                         }
                         KeyAction::Pause { duration } => {
                             if let Some(ms) = duration {
@@ -145,7 +158,7 @@ pub async fn perform<R: Runtime + 'static>(
                     }
                 }
             }
-            ActionSequence::Pointer { actions, .. } => {
+            ActionSequence::Pointer { id, actions } => {
                 for action in actions {
                     match action {
                         PointerAction::PointerDown { button } => {
@@ -157,6 +170,16 @@ pub async fn perform<R: Runtime + 'static>(
                                     *button,
                                 )
                                 .await?;
+                            // Track pressed button
+                            let mut sessions = state.sessions.write().await;
+                            if let Ok(session) = sessions.get_mut(&session_id) {
+                                session
+                                    .action_state
+                                    .pressed_buttons
+                                    .entry(id.clone())
+                                    .or_default()
+                                    .insert(*button);
+                            }
                         }
                         PointerAction::PointerUp { button } => {
                             executor
@@ -167,6 +190,15 @@ pub async fn perform<R: Runtime + 'static>(
                                     *button,
                                 )
                                 .await?;
+                            // Remove from tracked buttons
+                            let mut sessions = state.sessions.write().await;
+                            if let Ok(session) = sessions.get_mut(&session_id) {
+                                if let Some(buttons) =
+                                    session.action_state.pressed_buttons.get_mut(id)
+                                {
+                                    buttons.remove(button);
+                                }
+                            }
                         }
                         PointerAction::PointerMove { x, y, duration } => {
                             pointer_state.x = *x;
@@ -193,7 +225,7 @@ pub async fn perform<R: Runtime + 'static>(
                     }
                 }
             }
-            ActionSequence::Wheel { actions, .. } => {
+            ActionSequence::Wheel { _id: _, actions } => {
                 for action in actions {
                     match action {
                         WheelAction::Scroll {
@@ -220,7 +252,7 @@ pub async fn perform<R: Runtime + 'static>(
                     }
                 }
             }
-            ActionSequence::None { actions, .. } => {
+            ActionSequence::None { _id: _, actions } => {
                 for action in actions {
                     match action {
                         PauseAction::Pause { duration } => {
@@ -242,9 +274,39 @@ pub async fn release<R: Runtime + 'static>(
     State(state): State<Arc<AppState<R>>>,
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
-    let sessions = state.sessions.read().await;
-    let _session = sessions.get(&session_id)?;
+    // Get session state and clear tracked actions
+    let (current_window, timeouts, frame_context, pressed_keys, pressed_buttons) = {
+        let mut sessions = state.sessions.write().await;
+        let session = sessions.get_mut(&session_id)?;
+        let pressed_keys: Vec<String> = session.action_state.pressed_keys.drain().collect();
+        let pressed_buttons = std::mem::take(&mut session.action_state.pressed_buttons);
+        (
+            session.current_window.clone(),
+            session.timeouts.clone(),
+            session.frame_context.clone(),
+            pressed_keys,
+            pressed_buttons,
+        )
+    };
 
-    // TODO: Release all pressed keys/buttons (no-op for now)
+    let executor = state.get_executor_for_window(&current_window, timeouts, frame_context)?;
+    let modifier_state = ModifierState::default();
+
+    // Release all pressed keys (keyUp events)
+    for key in pressed_keys {
+        executor
+            .dispatch_key_event(&key, false, &modifier_state)
+            .await?;
+    }
+
+    // Release all pressed pointer buttons (pointerUp events)
+    for (_source_id, buttons) in pressed_buttons {
+        for button in buttons {
+            executor
+                .dispatch_pointer_event(PointerEventType::Up, 0, 0, button)
+                .await?;
+        }
+    }
+
     Ok(WebDriverResponse::null())
 }
