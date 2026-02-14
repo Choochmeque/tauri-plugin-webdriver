@@ -238,19 +238,18 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for WindowsExecutor<R> {
     // Print
     // =========================================================================
 
+    #[allow(clippy::too_many_lines)]
     async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
         let (tx, rx) = oneshot::channel();
         let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
-        // Create temp file for PDF output (auto-cleanup on drop)
-        let temp_file = tempfile::Builder::new()
-            .prefix("webdriver_print_")
-            .suffix(".pdf")
-            .tempfile()
-            .map_err(|e| {
-                WebDriverErrorResponse::unknown_error(&format!("Failed to create temp file: {e}"))
-            })?;
-        let pdf_path = temp_file.path().to_path_buf();
+        // Create temp directory for PDF output (auto-cleanup on drop)
+        // Note: We use TempDir instead of NamedTempFile because NamedTempFile
+        // opens/locks the file on Windows, preventing WebView2 from writing to it
+        let temp_dir = tempfile::TempDir::new().map_err(|e| {
+            WebDriverErrorResponse::unknown_error(&format!("Failed to create temp dir: {e}"))
+        })?;
+        let pdf_path = temp_dir.path().join("print.pdf");
         let pdf_path_clone = pdf_path.clone();
 
         // Extract options before moving into closure
