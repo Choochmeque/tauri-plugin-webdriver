@@ -225,7 +225,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 el.scrollIntoView({{ block: 'center', inline: 'center' }});

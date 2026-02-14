@@ -245,7 +245,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var parent = window.{parent_js_var};
-                if (!parent || !document.contains(parent)) {{
+                if (!parent || !parent.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var el = {strategy_js};
@@ -271,7 +271,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var parent = window.{parent_js_var};
-                if (!parent || !document.contains(parent)) {{
+                if (!parent || !parent.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var elements = {strategy_js};
@@ -291,7 +291,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 return el.textContent || '';
@@ -306,7 +306,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 return el.tagName.toLowerCase();
@@ -330,7 +330,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var attrName = '{escaped_name}'.toLowerCase();
@@ -379,7 +379,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 return el['{escaped_name}'];
@@ -399,7 +399,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 return window.getComputedStyle(el).getPropertyValue('{escaped_prop}');
@@ -414,7 +414,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var rect = el.getBoundingClientRect();
@@ -444,7 +444,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var style = window.getComputedStyle(el);
@@ -460,7 +460,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 return !el.disabled;
@@ -475,7 +475,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {{
@@ -496,7 +496,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 el.scrollIntoView({{ block: 'center', inline: 'center' }});
@@ -518,7 +518,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 el.focus();
@@ -559,7 +559,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 el.focus();
@@ -618,7 +618,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
 
@@ -714,7 +714,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r#"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
 
@@ -794,7 +794,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         let script = format!(
             r"(function() {{
                 var el = window.{js_var};
-                if (!el || !document.contains(el)) {{
+                if (!el || !el.isConnected) {{
                     throw new Error('stale element reference');
                 }}
                 var shadow = el.shadowRoot;
@@ -1406,7 +1406,7 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
                 let script = format!(
                     r"(function() {{
                         var el = window.{js_var};
-                        if (!el || !document.contains(el)) {{
+                        if (!el || !el.isConnected) {{
                             throw new Error('stale element reference');
                         }}
                         if (el.tagName !== 'IFRAME' && el.tagName !== 'FRAME') {{
