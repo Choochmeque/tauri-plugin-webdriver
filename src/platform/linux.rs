@@ -318,7 +318,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
             });
 
             // Run print operation (silent, no dialog)
-            let _ = print_op.print();
+            let () = print_op.print();
         });
 
         if let Err(e) = result {
@@ -338,7 +338,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
             Err(_) => {
                 return Err(WebDriverErrorResponse::script_timeout());
             }
-        };
+        }
 
         // Read the PDF file
         let pdf_data = std::fs::read(&pdf_path).map_err(|e| {
