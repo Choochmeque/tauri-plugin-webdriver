@@ -67,7 +67,7 @@ export const config: Options.Testrunner = {
 
   onComplete: function () {
     console.log('Stopping Tauri application...');
-    stopApp();
+    stopApp(WEBDRIVER_PORT);
   },
 
   beforeSession: async function () {
