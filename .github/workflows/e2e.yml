@@ -129,6 +129,58 @@ jobs:
             adb install -r examples/tauri-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
             cd examples/tauri-app && TAURI_TEST_PLATFORM=android pnpm test:e2e
 
+  # iOS e2e tests
+  e2e-ios:
+    name: e2e-tests (ios)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            examples/tauri-app/src-tauri
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'examples/tauri-app/pnpm-lock.yaml'
+
+      - name: Install frontend dependencies
+        working-directory: examples/tauri-app
+        run: pnpm install
+
+      - name: Build iOS app
+        working-directory: examples/tauri-app
+        run: pnpm tauri ios build --target aarch64-apple-ios-sim --debug
+
+      - name: Boot iOS Simulator
+        run: |
+          # List available simulators and boot iPhone 15
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15" | head -1 | grep -oE '[0-9A-F-]{36}')
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
+
+      - name: Install app on Simulator
+        working-directory: examples/tauri-app
+        run: |
+          APP_PATH=$(find src-tauri/gen/apple/build -name "*.app" -type d | head -1)
+          xcrun simctl install "$SIMULATOR_ID" "$APP_PATH"
+
+      - name: Run iOS e2e tests
+        working-directory: examples/tauri-app
+        run: TAURI_TEST_PLATFORM=ios pnpm test:e2e
+
   # # Code coverage
   # coverage:
   #   name: code-coverage
