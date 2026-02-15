@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -17,10 +18,62 @@ use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use windows_core::BOOL;
 
 use crate::platform::alert_state::{AlertState, AlertStateManager, AlertType, PendingAlert};
-use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
+
+// =============================================================================
+// Async Script State
+// =============================================================================
+
+/// Handler name used for postMessage calls
+const HANDLER_NAME: &str = "webdriver_async";
+
+/// Shared state for pending async script operations.
+/// This is managed via Tauri's state system (`app.manage()`).
+#[derive(Default)]
+pub struct AsyncScriptState {
+    pending: Mutex<HashMap<String, oneshot::Sender<Result<Value, String>>>>,
+    /// Track which webviews have native handlers registered (by window label)
+    registered_handlers: Mutex<HashSet<String>>,
+}
+
+impl AsyncScriptState {
+    /// Register a pending async operation and return the receiver
+    pub fn register(&self, id: String) -> oneshot::Receiver<Result<Value, String>> {
+        let (tx, rx) = oneshot::channel();
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.insert(id, tx);
+        }
+        rx
+    }
+
+    /// Complete a pending async operation with a result
+    pub fn complete(&self, id: &str, result: Result<Value, String>) {
+        if let Ok(mut pending) = self.pending.lock() {
+            if let Some(tx) = pending.remove(id) {
+                let _ = tx.send(result);
+            }
+        }
+    }
+
+    /// Cancel a pending async operation
+    pub fn cancel(&self, id: &str) {
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.remove(id);
+        }
+    }
+
+    /// Check if a handler is registered for a window label, and mark it as registered if not.
+    /// Returns true if the handler was already registered, false if it needs to be registered.
+    pub fn mark_handler_registered(&self, label: &str) -> bool {
+        if let Ok(mut handlers) = self.registered_handlers.lock() {
+            !handlers.insert(label.to_string())
+        } else {
+            false
+        }
+    }
+}
 
 /// Wrapper for raw COM pointer to allow sending across threads.
 /// SAFETY: The COM object must only be accessed from a COM-initialized thread.

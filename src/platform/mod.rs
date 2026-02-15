@@ -1,10 +1,11 @@
 pub(crate) mod alert_state;
-mod async_state;
 mod executor;
 
 pub use alert_state::AlertStateManager;
-pub use async_state::AsyncScriptState;
 pub use executor::*;
+
+#[cfg(target_os = "windows")]
+pub use windows::AsyncScriptState;
 
 #[cfg(target_os = "macos")]
 mod macos;
