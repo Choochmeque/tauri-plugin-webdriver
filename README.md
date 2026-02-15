@@ -19,8 +19,8 @@ A W3C WebDriver implementation for Tauri applications, enabling automated testin
 | macOS | Full support | WKWebView native APIs |
 | Windows | Full support | WebView2 native APIs |
 | Linux | Full support | WebKitGTK native APIs |
+| Android | Full support | Android WebView |
 | iOS | Planned | WKWebView |
-| Android | Planned | Android WebView |
 
 ## Installation
 
