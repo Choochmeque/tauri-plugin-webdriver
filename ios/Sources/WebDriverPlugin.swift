@@ -11,7 +11,6 @@ class EvaluateJsArgs: Decodable {
 }
 
 class AsyncScriptArgs: Decodable {
-    let asyncId: String
     let script: String
     var timeoutMs: Int64?
 }
@@ -61,53 +60,12 @@ class PendingAlert {
     }
 }
 
-// MARK: - Async Script Bridge
-
-class AsyncScriptBridge: NSObject, WKScriptMessageHandler {
-    var pendingCallbacks: [String: (Any?) -> Void] = [:]
-    private let lock = NSLock()
-
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any],
-              let asyncId = body["asyncId"] as? String else {
-            return
-        }
-
-        lock.lock()
-        let callback = pendingCallbacks.removeValue(forKey: asyncId)
-        lock.unlock()
-
-        if let callback = callback {
-            let result = body["result"]
-            let error = body["error"] as? String
-            if let error = error {
-                callback(["error": error])
-            } else {
-                callback(["result": result ?? NSNull()])
-            }
-        }
-    }
-
-    func registerCallback(asyncId: String, callback: @escaping (Any?) -> Void) {
-        lock.lock()
-        pendingCallbacks[asyncId] = callback
-        lock.unlock()
-    }
-
-    func removeCallback(asyncId: String) {
-        lock.lock()
-        pendingCallbacks.removeValue(forKey: asyncId)
-        lock.unlock()
-    }
-}
-
 // MARK: - WebDriver Plugin
 
 class WebDriverPlugin: Plugin, WKUIDelegate {
     private var webView: WKWebView?
     private var pendingAlert: PendingAlert?
     private let alertLock = NSLock()
-    private let asyncBridge = AsyncScriptBridge()
     private var originalUIDelegate: WKUIDelegate?
 
     @objc public override func load(webview: WKWebView) {
@@ -118,9 +76,6 @@ class WebDriverPlugin: Plugin, WKUIDelegate {
 
         // Set ourselves as the UI delegate for alert handling
         webview.uiDelegate = self
-
-        // Add script message handler for async script callbacks
-        webview.configuration.userContentController.add(asyncBridge, name: "__webdriver_bridge")
     }
 
     // MARK: - WKUIDelegate (Alert Handling)
@@ -213,58 +168,61 @@ class WebDriverPlugin: Plugin, WKUIDelegate {
             return
         }
 
-        let asyncId = args.asyncId
-        let timeoutMs = args.timeoutMs ?? 30000
-
-        // Register callback
-        asyncBridge.registerCallback(asyncId: asyncId) { response in
-            if let response = response as? [String: Any] {
-                if let error = response["error"] as? String {
-                    invoke.resolve([
-                        "success": false,
-                        "error": error
-                    ])
-                } else {
-                    // Result is already JSON.stringify'd from JavaScript
-                    let jsonValue = response["result"] as? String
-                    invoke.resolve([
-                        "success": true,
-                        "value": jsonValue as Any
-                    ])
-                }
-            } else {
-                invoke.resolve([
-                    "success": true,
-                    "value": NSNull()
-                ])
-            }
-        }
-
-        // Wrap script with callback bridge
-        let wrappedScript = """
-        (function() {
+        // Wrap script in a Promise - __done resolves/rejects the promise
+        // The script from Rust already sets up __args and pushes __done
+        let promiseScript = """
+        return new Promise((resolve, reject) => {
             var __done = function(result, error) {
-                window.webkit.messageHandlers.__webdriver_bridge.postMessage({
-                    asyncId: '\(asyncId)',
-                    result: result !== undefined ? JSON.stringify(result) : null,
-                    error: error || null
-                });
+                if (error) {
+                    reject(new Error(typeof error === 'string' ? error : String(error)));
+                } else {
+                    resolve(result);
+                }
             };
             try {
                 \(args.script)
             } catch (e) {
-                __done(null, e.message || String(e));
+                reject(e);
             }
-        })();
+        });
         """
 
         DispatchQueue.main.async {
-            wv.evaluateJavaScript(wrappedScript, completionHandler: nil)
-        }
-
-        // Set timeout for cleanup
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(timeoutMs))) { [weak self] in
-            self?.asyncBridge.removeCallback(asyncId: asyncId)
+            wv.callAsyncJavaScript(
+                promiseScript,
+                arguments: [:],
+                in: nil,
+                in: .page,
+                completionHandler: { result in
+                    switch result {
+                    case .success(let value):
+                        // Convert value to JSON-compatible format
+                        var jsonValue: Any = NSNull()
+                        if value is NSNull {
+                            jsonValue = NSNull()
+                        } else if let str = value as? String {
+                            jsonValue = str
+                        } else if let num = value as? NSNumber {
+                            jsonValue = num
+                        } else if let arr = value as? [Any] {
+                            jsonValue = arr
+                        } else if let dict = value as? [String: Any] {
+                            jsonValue = dict
+                        } else {
+                            jsonValue = String(describing: value)
+                        }
+                        invoke.resolve([
+                            "success": true,
+                            "value": jsonValue
+                        ])
+                    case .failure(let error):
+                        invoke.resolve([
+                            "success": false,
+                            "error": error.localizedDescription
+                        ])
+                    }
+                }
+            )
         }
     }
 

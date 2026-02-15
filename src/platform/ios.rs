@@ -43,7 +43,6 @@ struct EvaluateJsArgs {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AsyncScriptArgs {
-    async_id: String,
     script: String,
     timeout_ms: u64,
 }
@@ -134,43 +133,35 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for IOSExecutor<R> {
         let args_json = serde_json::to_string(args)
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
-        let async_id = uuid::Uuid::new_v4().to_string();
-
-        // Build wrapper that includes argument deserialization and callback
+        // Build wrapper that includes argument deserialization
+        // Swift wraps this in a Promise and provides __done via callAsyncJavaScript
         let wrapper = format!(
-            r"(function() {{
-                var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-                function deserializeArg(arg) {{
-                    if (arg === null || arg === undefined) return arg;
-                    if (Array.isArray(arg)) return arg.map(deserializeArg);
-                    if (typeof arg === 'object') {{
-                        if (arg[ELEMENT_KEY]) {{
-                            var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
-                            if (!el) throw new Error('stale element reference');
-                            return el;
-                        }}
-                        var result = {{}};
-                        for (var key in arg) {{
-                            if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
-                        }}
-                        return result;
+            r"var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
+            function deserializeArg(arg) {{
+                if (arg === null || arg === undefined) return arg;
+                if (Array.isArray(arg)) return arg.map(deserializeArg);
+                if (typeof arg === 'object') {{
+                    if (arg[ELEMENT_KEY]) {{
+                        var el = window['__wd_el_' + arg[ELEMENT_KEY].replace(/-/g, '')];
+                        if (!el) throw new Error('stale element reference');
+                        return el;
                     }}
-                    return arg;
+                    var result = {{}};
+                    for (var key in arg) {{
+                        if (arg.hasOwnProperty(key)) result[key] = deserializeArg(arg[key]);
+                    }}
+                    return result;
                 }}
-                var __args = {args_json}.map(deserializeArg);
-                __args.push(__done);
-                try {{
-                    (function() {{ {script} }}).apply(null, __args);
-                }} catch (e) {{
-                    __done(null, e.message || String(e));
-                }}
-            }})()"
+                return arg;
+            }}
+            var __args = {args_json}.map(deserializeArg);
+            __args.push(__done);
+            (function() {{ {script} }}).apply(null, __args);"
         );
 
         let webdriver = self.window.app_handle().state::<Webdriver<R>>();
 
         let plugin_args = AsyncScriptArgs {
-            async_id,
             script: wrapper,
             timeout_ms: self.timeouts.script_ms,
         };
@@ -182,16 +173,8 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for IOSExecutor<R> {
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 
         if result.success {
-            let value = if let Some(value_str) = result.value {
-                if let Some(s) = value_str.as_str() {
-                    serde_json::from_str(s).unwrap_or(value_str)
-                } else {
-                    value_str
-                }
-            } else {
-                Value::Null
-            };
-            Ok(value)
+            // iOS returns the value directly (not JSON-encoded) via callAsyncJavaScript
+            Ok(result.value.unwrap_or(Value::Null))
         } else {
             Err(WebDriverErrorResponse::javascript_error(
                 result.error.as_deref().unwrap_or("Unknown error"),
