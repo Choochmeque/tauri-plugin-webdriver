@@ -5,8 +5,8 @@ use tauri::{Manager, Runtime, WebviewWindow};
 
 use crate::mobile::Webdriver;
 use crate::platform::{
-    wrap_script_for_frame_context, FrameId, ModifierState, PlatformExecutor, PointerEventType,
-    PrintOptions, WindowRect,
+    wrap_script_for_frame_context, Cookie, FrameId, ModifierState, PlatformExecutor,
+    PointerEventType, PrintOptions, WindowRect,
 };
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -62,6 +62,35 @@ struct ScreenshotArgs {
     timeout_ms: u64,
 }
 
+#[derive(Debug, Serialize)]
+struct GetCookiesArgs {
+    url: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetCookieArgs {
+    url: String,
+    name: String,
+    value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    domain: Option<String>,
+    secure: bool,
+    http_only: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expiry: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    same_site: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeleteCookieArgs {
+    url: String,
+    name: String,
+}
+
 // =============================================================================
 // Plugin Method Responses
 // =============================================================================
@@ -79,6 +108,13 @@ struct AlertResult {
     r#type: Option<String>,
     #[serde(rename = "defaultText")]
     default_text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CookiesResult {
+    success: bool,
+    cookies: Option<String>, // JSON array as string
+    error: Option<String>,
 }
 
 /// Register webview handlers on Android (placeholder - no-op for now)
@@ -554,6 +590,125 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
         };
 
         self.evaluate_js(&script).await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Cookies (using Android CookieManager via plugin)
+    // =========================================================================
+
+    async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
+        let url = self
+            .window
+            .url()
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?
+            .to_string();
+
+        let webdriver = self.window.app_handle().state::<Webdriver<R>>();
+
+        let result: CookiesResult = webdriver
+            .0
+            .run_mobile_plugin_async("getCookies", GetCookiesArgs { url })
+            .await
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
+        if !result.success {
+            return Err(WebDriverErrorResponse::unknown_error(
+                result.error.as_deref().unwrap_or("Failed to get cookies"),
+            ));
+        }
+
+        // Parse JSON array of cookies from the plugin
+        let cookies_json = result.cookies.unwrap_or_default();
+        if cookies_json.is_empty() || cookies_json == "[]" {
+            return Ok(Vec::new());
+        }
+
+        let cookies: Vec<Cookie> = serde_json::from_str(&cookies_json).map_err(|e| {
+            WebDriverErrorResponse::unknown_error(&format!("Failed to parse cookies: {}", e))
+        })?;
+
+        Ok(cookies)
+    }
+
+    async fn get_cookie(&self, name: &str) -> Result<Option<Cookie>, WebDriverErrorResponse> {
+        let cookies = self.get_all_cookies().await?;
+        Ok(cookies.into_iter().find(|c| c.name == name))
+    }
+
+    async fn add_cookie(&self, mut cookie: Cookie) -> Result<(), WebDriverErrorResponse> {
+        let url = self
+            .window
+            .url()
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
+        // Per WebDriver spec: if no domain is specified, use the current page's domain
+        if cookie.domain.is_none() {
+            cookie.domain = url.host_str().map(String::from);
+        }
+
+        // Default path to "/" if not specified
+        if cookie.path.is_none() {
+            cookie.path = Some("/".to_string());
+        }
+
+        let webdriver = self.window.app_handle().state::<Webdriver<R>>();
+
+        let _result: Value = webdriver
+            .0
+            .run_mobile_plugin_async(
+                "setCookie",
+                SetCookieArgs {
+                    url: url.to_string(),
+                    name: cookie.name,
+                    value: cookie.value,
+                    path: cookie.path,
+                    domain: cookie.domain,
+                    secure: cookie.secure,
+                    http_only: cookie.http_only,
+                    expiry: cookie.expiry,
+                    same_site: cookie.same_site,
+                },
+            )
+            .await
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
+        let url = self
+            .window
+            .url()
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?
+            .to_string();
+
+        let webdriver = self.window.app_handle().state::<Webdriver<R>>();
+
+        let _result: Value = webdriver
+            .0
+            .run_mobile_plugin_async(
+                "deleteCookie",
+                DeleteCookieArgs {
+                    url,
+                    name: name.to_string(),
+                },
+            )
+            .await
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn delete_all_cookies(&self) -> Result<(), WebDriverErrorResponse> {
+        let webdriver = self.window.app_handle().state::<Webdriver<R>>();
+
+        let _result: Value = webdriver
+            .0
+            .run_mobile_plugin_async("deleteAllCookies", ())
+            .await
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
+
         Ok(())
     }
 

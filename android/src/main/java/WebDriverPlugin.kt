@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.webkit.JavascriptInterface
+import android.webkit.CookieManager
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
@@ -67,12 +68,50 @@ class AlertResponseArgs {
     var promptText: String? = null
 }
 
+@InvokeArg
+class SetCookieArgs {
+    lateinit var url: String
+    lateinit var name: String
+    lateinit var value: String
+    var path: String? = null
+    var domain: String? = null
+    var secure: Boolean = false
+    var httpOnly: Boolean = false
+    var expiry: Long? = null
+    var sameSite: String? = null
+}
+
+@InvokeArg
+class DeleteCookieArgs {
+    lateinit var url: String
+    lateinit var name: String
+}
+
+@InvokeArg
+class GetCookiesArgs {
+    lateinit var url: String
+}
+
 data class PendingAlert(
     val message: String,
     val defaultText: String?,
     val type: String, // "alert", "confirm", "prompt"
     var promptInput: String? = null,
     var responseCallback: ((Boolean, String?) -> Unit)? = null
+)
+
+/**
+ * Cookie metadata that CookieManager doesn't expose
+ */
+data class CookieMetadata(
+    val name: String,
+    val value: String,
+    val path: String?,
+    val domain: String?,
+    val secure: Boolean,
+    val httpOnly: Boolean,
+    val expiry: Long?,
+    val sameSite: String?
 )
 
 @TauriPlugin
@@ -82,6 +121,9 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
     private val pendingAsyncScripts = ConcurrentHashMap<String, (Any?) -> Unit>()
     private var pendingAlert: PendingAlert? = null
     private val alertLock = Object()
+    // Cache cookie metadata since CookieManager doesn't expose attributes
+    // Key format: "domain:path:name"
+    private val cookieMetadataCache = ConcurrentHashMap<String, CookieMetadata>()
 
     override fun load(webView: WebView) {
         this.webView = webView
@@ -511,6 +553,167 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
                 type = type,
                 responseCallback = callback
             )
+        }
+    }
+
+    /**
+     * Get all cookies for a URL - returns JSON array with full metadata
+     */
+    @Command
+    fun getCookies(invoke: Invoke) {
+        val args = invoke.parseArgs(GetCookiesArgs::class.java)
+
+        mainHandler.post {
+            try {
+                val cookieManager = CookieManager.getInstance()
+                val cookieString = cookieManager.getCookie(args.url)
+
+                val cookiesArray = org.json.JSONArray()
+
+                if (cookieString != null) {
+                    val cookies = cookieString.split(";").map { it.trim() }
+                    for (cookie in cookies) {
+                        val parts = cookie.split("=", limit = 2)
+                        if (parts.size >= 2) {
+                            val name = parts[0].trim()
+                            val value = parts[1].trim()
+
+                            // Look up metadata from cache
+                            val metadata = findCookieMetadata(name)
+
+                            val cookieObj = org.json.JSONObject()
+                            cookieObj.put("name", name)
+                            cookieObj.put("value", value)
+                            cookieObj.put("path", metadata?.path ?: "/")
+                            if (metadata?.domain != null) {
+                                cookieObj.put("domain", metadata.domain)
+                            }
+                            cookieObj.put("secure", metadata?.secure ?: false)
+                            cookieObj.put("httpOnly", metadata?.httpOnly ?: false)
+                            if (metadata?.expiry != null) {
+                                cookieObj.put("expiry", metadata.expiry)
+                            }
+                            if (metadata?.sameSite != null) {
+                                cookieObj.put("sameSite", metadata.sameSite)
+                            }
+                            cookiesArray.put(cookieObj)
+                        }
+                    }
+                }
+
+                val ret = JSObject()
+                ret.put("success", true)
+                ret.put("cookies", cookiesArray.toString())
+                invoke.resolve(ret)
+            } catch (e: Exception) {
+                invoke.reject("Failed to get cookies: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Find cookie metadata by name (searches all entries)
+     */
+    private fun findCookieMetadata(name: String): CookieMetadata? {
+        return cookieMetadataCache.values.find { it.name == name }
+    }
+
+    /**
+     * Set a cookie for a URL
+     */
+    @Command
+    fun setCookie(invoke: Invoke) {
+        val args = invoke.parseArgs(SetCookieArgs::class.java)
+
+        mainHandler.post {
+            try {
+                val cookieManager = CookieManager.getInstance()
+
+                // Build cookie string for CookieManager
+                val cookieStr = StringBuilder("${args.name}=${args.value}")
+                args.path?.let { cookieStr.append("; path=$it") }
+                args.domain?.let { cookieStr.append("; domain=$it") }
+                if (args.secure) cookieStr.append("; secure")
+                if (args.httpOnly) cookieStr.append("; httponly")
+                args.expiry?.let { cookieStr.append("; max-age=$it") }
+                args.sameSite?.let { cookieStr.append("; samesite=$it") }
+
+                cookieManager.setCookie(args.url, cookieStr.toString())
+
+                // Store metadata in cache
+                val cacheKey = "${args.domain ?: ""}:${args.path ?: "/"}:${args.name}"
+                cookieMetadataCache[cacheKey] = CookieMetadata(
+                    name = args.name,
+                    value = args.value,
+                    path = args.path ?: "/",
+                    domain = args.domain,
+                    secure = args.secure,
+                    httpOnly = args.httpOnly,
+                    expiry = args.expiry,
+                    sameSite = args.sameSite
+                )
+
+                // Flush to persist
+                cookieManager.flush()
+
+                invoke.resolve()
+            } catch (e: Exception) {
+                invoke.reject("Failed to set cookie: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Delete a specific cookie by name
+     */
+    @Command
+    fun deleteCookie(invoke: Invoke) {
+        val args = invoke.parseArgs(DeleteCookieArgs::class.java)
+
+        mainHandler.post {
+            try {
+                val cookieManager = CookieManager.getInstance()
+
+                // Look up metadata to get the original path/domain
+                val metadata = findCookieMetadata(args.name)
+                val path = metadata?.path ?: "/"
+                val domain = metadata?.domain
+
+                // Delete by setting expired cookie with same path/domain
+                val deleteCookie = StringBuilder("${args.name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=$path")
+                domain?.let { deleteCookie.append("; domain=$it") }
+
+                cookieManager.setCookie(args.url, deleteCookie.toString())
+                cookieManager.flush()
+
+                // Remove from metadata cache
+                cookieMetadataCache.entries.removeIf { it.value.name == args.name }
+
+                invoke.resolve()
+            } catch (e: Exception) {
+                invoke.reject("Failed to delete cookie: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Delete all cookies
+     */
+    @Command
+    fun deleteAllCookies(invoke: Invoke) {
+        mainHandler.post {
+            try {
+                val cookieManager = CookieManager.getInstance()
+                cookieManager.removeAllCookies(null)
+                cookieManager.flush()
+
+                // Clear metadata cache
+                cookieMetadataCache.clear()
+
+                invoke.resolve()
+            } catch (e: Exception) {
+                invoke.reject("Failed to delete all cookies: ${e.message}")
+            }
         }
     }
 
