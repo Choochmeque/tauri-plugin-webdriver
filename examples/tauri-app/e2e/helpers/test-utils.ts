@@ -3,6 +3,11 @@ import { browser, $ } from '@wdio/globals';
 export const WEBDRIVER_PORT = 4445;
 export const BASE_URL = 'tauri://localhost';
 
+export function isMobile(): boolean {
+  const platform = process.env.TAURI_TEST_PLATFORM;
+  return platform === 'android' || platform === 'ios';
+}
+
 export async function resetAppState(): Promise<void> {
   // Navigate to main page using click
   await navigateToTestPage('main');

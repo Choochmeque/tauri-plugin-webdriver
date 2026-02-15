@@ -1,4 +1,4 @@
-import { navigateToTestPage } from '../helpers/test-utils.js';
+import { navigateToTestPage, isMobile } from '../helpers/test-utils.js';
 
 describe('Window Management', () => {
   beforeEach(async () => {
@@ -57,7 +57,8 @@ describe('Window Management', () => {
       expect(rect.height).toBeGreaterThan(0);
     });
 
-    it('should set window rect', async () => {
+    // Skip on mobile - window rect manipulation not supported
+    (isMobile() ? it.skip : it)('should set window rect', async () => {
       const newRect = {
         x: 100,
         y: 100,
@@ -77,7 +78,8 @@ describe('Window Management', () => {
       expect(rect.height).toBeLessThanOrEqual(newRect.height + 50);
     });
 
-    it('should set window size only', async () => {
+    // Skip on mobile - window rect manipulation not supported
+    (isMobile() ? it.skip : it)('should set window size only', async () => {
       const initialRect = await browser.getWindowRect();
 
       await browser.setWindowRect(null, null, 900, 700);
@@ -92,7 +94,8 @@ describe('Window Management', () => {
       expect(newRect.height).toBeLessThanOrEqual(750);
     });
 
-    it('should set window position only', async () => {
+    // Skip on mobile - window rect manipulation not supported
+    (isMobile() ? it.skip : it)('should set window position only', async () => {
       await browser.setWindowRect(200, 150, null, null);
       await browser.pause(100);
 
@@ -106,7 +109,8 @@ describe('Window Management', () => {
     });
   });
 
-  describe('Window Maximize', () => {
+  // Skip entire section on mobile - window state manipulation not supported
+  (isMobile() ? describe.skip : describe)('Window Maximize', () => {
     it('should maximize window', async () => {
       const initialRect = await browser.getWindowRect();
 
@@ -121,7 +125,8 @@ describe('Window Management', () => {
     });
   });
 
-  describe('Window Minimize', () => {
+  // Skip entire section on mobile - window state manipulation not supported
+  (isMobile() ? describe.skip : describe)('Window Minimize', () => {
     it('should minimize window', async () => {
       // Minimize the window
       await browser.minimizeWindow();
@@ -146,7 +151,8 @@ describe('Window Management', () => {
     });
   });
 
-  describe('Window Fullscreen', () => {
+  // Skip entire section on mobile - window state manipulation not supported
+  (isMobile() ? describe.skip : describe)('Window Fullscreen', () => {
     it('should enter fullscreen', async () => {
       const initialRect = await browser.getWindowRect();
 
