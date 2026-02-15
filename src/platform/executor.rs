@@ -1345,6 +1345,9 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         Ok(WindowRect::default())
     }
 
+    #[cfg(mobile)]
+    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse>;
+
     /// Set window rectangle (position and size)
     #[cfg(desktop)]
     async fn set_window_rect(
@@ -1412,37 +1415,39 @@ pub trait PlatformExecutor<R: Runtime>: Send + Sync {
         self.get_window_rect().await
     }
 
-    /// Get window rectangle (mobile no-op)
-    #[cfg(mobile)]
-    async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        Ok(WindowRect::default())
-    }
-
-    /// Set window rectangle (mobile no-op)
+    /// Set window rectangle (mobile unsupported)
     #[cfg(mobile)]
     async fn set_window_rect(
         &self,
         _rect: WindowRect,
     ) -> Result<WindowRect, WebDriverErrorResponse> {
-        Ok(WindowRect::default())
+        Err(WebDriverErrorResponse::unsupported_operation(
+            "Setting window rect is not supported on mobile platforms",
+        ))
     }
 
-    /// Maximize window (mobile no-op)
+    /// Maximize window (mobile unsupported)
     #[cfg(mobile)]
     async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        Ok(WindowRect::default())
+        Err(WebDriverErrorResponse::unsupported_operation(
+            "Maximizing window is not supported on mobile platforms",
+        ))
     }
 
-    /// Minimize window (mobile no-op)
+    /// Minimize window (mobile unsupported)
     #[cfg(mobile)]
     async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
-        Ok(())
+        Err(WebDriverErrorResponse::unsupported_operation(
+            "Minimizing window is not supported on mobile platforms",
+        ))
     }
 
-    /// Set window to fullscreen (mobile no-op)
+    /// Set window to fullscreen (mobile unsupported)
     #[cfg(mobile)]
     async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        Ok(WindowRect::default())
+        Err(WebDriverErrorResponse::unsupported_operation(
+            "Fullscreen window is not supported on mobile platforms",
+        ))
     }
 
     // =========================================================================

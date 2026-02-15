@@ -123,6 +123,12 @@ pub async fn create<R: Runtime + 'static>(
     // Create session with initial window
     let session = sessions.create(initial_window);
 
+    // Mobile platforms don't support window rect manipulation
+    #[cfg(mobile)]
+    let set_window_rect = false;
+    #[cfg(desktop)]
+    let set_window_rect = true;
+
     let response = SessionResponse {
         session_id: session.id.clone(),
         capabilities: json!({
@@ -131,7 +137,7 @@ pub async fn create<R: Runtime + 'static>(
             "platformName": std::env::consts::OS,
             "acceptInsecureCerts": false,
             "pageLoadStrategy": "normal",
-            "setWindowRect": true,
+            "setWindowRect": set_window_rect,
             "timeouts": {
                 "implicit": session.timeouts.implicit_ms,
                 "pageLoad": session.timeouts.page_load_ms,

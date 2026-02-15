@@ -62,7 +62,6 @@ struct ScreenshotArgs {
     timeout_ms: u64,
 }
 
-
 // =============================================================================
 // Plugin Method Responses
 // =============================================================================
@@ -559,7 +558,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
     }
 
     // =========================================================================
-    // Window Management - Android doesn't support these operations
+    // Window Management
     // =========================================================================
 
     async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
@@ -584,30 +583,5 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
             width: result.width,
             height: result.height,
         })
-    }
-
-    async fn set_window_rect(
-        &self,
-        _rect: WindowRect,
-    ) -> Result<WindowRect, WebDriverErrorResponse> {
-        // Android doesn't support window repositioning/resizing
-        // Return current viewport size
-        self.get_window_rect().await
-    }
-
-    async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        // Android apps are already "maximized" (fullscreen)
-        self.get_window_rect().await
-    }
-
-    async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
-        // Android doesn't support minimizing via API
-        // Apps go to background via system gestures, not programmatically
-        Ok(())
-    }
-
-    async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        // Android apps are already fullscreen
-        self.get_window_rect().await
     }
 }
