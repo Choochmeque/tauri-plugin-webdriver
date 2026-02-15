@@ -472,7 +472,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
         }
 
         let cookies: Vec<Cookie> = serde_json::from_str(&cookies_json).map_err(|e| {
-            WebDriverErrorResponse::unknown_error(&format!("Failed to parse cookies: {}", e))
+            WebDriverErrorResponse::unknown_error(&format!("Failed to parse cookies: {e}"))
         })?;
 
         Ok(cookies)
