@@ -80,6 +80,20 @@ fn parse_user_agent(user_agent: &str) -> (String, String) {
         return ("WebKitGTK".to_string(), version.to_string());
     }
 
+    // iOS WKWebView: "... (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 ..."
+    // Also handles iPad and iPod
+    if (user_agent.contains("iPhone") || user_agent.contains("iPad") || user_agent.contains("iPod"))
+        && user_agent.contains("AppleWebKit/")
+    {
+        let version = user_agent
+            .split("AppleWebKit/")
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .and_then(|s| s.split('(').next()) // Remove trailing (KHTML if present
+            .unwrap_or("unknown");
+        return ("webkit".to_string(), version.to_string());
+    }
+
     // macOS WebKit/WKWebView: "... (Macintosh; ...) AppleWebKit/605.1.15 ..."
     // Note: WKWebView may not include "Safari/" or "Version/"
     if user_agent.contains("Macintosh") && user_agent.contains("AppleWebKit/") {
