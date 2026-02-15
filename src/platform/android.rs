@@ -62,21 +62,6 @@ struct ScreenshotArgs {
     timeout_ms: u64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PrintArgsKotlin {
-    orientation: Option<String>,
-    scale: Option<f64>,
-    background: Option<bool>,
-    page_width: Option<f64>,
-    page_height: Option<f64>,
-    margin_top: Option<f64>,
-    margin_bottom: Option<f64>,
-    margin_left: Option<f64>,
-    margin_right: Option<f64>,
-    shrink_to_fit: Option<bool>,
-    page_ranges: Option<Vec<String>>,
-}
 
 // =============================================================================
 // Plugin Method Responses
@@ -277,23 +262,9 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
     async fn print_page(&self, options: PrintOptions) -> Result<String, WebDriverErrorResponse> {
         let webdriver = self.window.app_handle().state::<Webdriver<R>>();
 
-        let args = PrintArgsKotlin {
-            orientation: options.orientation,
-            scale: options.scale,
-            background: options.background,
-            page_width: options.page_width,
-            page_height: options.page_height,
-            margin_top: options.margin_top,
-            margin_bottom: options.margin_bottom,
-            margin_left: options.margin_left,
-            margin_right: options.margin_right,
-            shrink_to_fit: options.shrink_to_fit,
-            page_ranges: options.page_ranges,
-        };
-
         let result: JsResult = webdriver
             .0
-            .run_mobile_plugin_async("printToPdf", args)
+            .run_mobile_plugin_async("printToPdf", options)
             .await
             .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
 

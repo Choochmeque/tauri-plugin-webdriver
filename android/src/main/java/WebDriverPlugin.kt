@@ -2,6 +2,7 @@ package com.plugin.webdriver
 
 import android.app.Activity
 import android.graphics.Bitmap
+import android.graphics.pdf.PdfDocument
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
@@ -18,6 +19,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 @InvokeArg
 class EvaluateJsArgs {
@@ -294,9 +296,7 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     /**
-     * Print page to PDF
-     * Note: Android WebView doesn't have direct PDF export like WKWebView.
-     * We use the print adapter approach.
+     * Print page to PDF using PdfDocument
      */
     @Command
     fun printToPdf(invoke: Invoke) {
@@ -308,9 +308,69 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
 
-        // Android doesn't support direct PDF generation from WebView without PrintManager
-        // For now, return an error - this requires PrintDocumentAdapter which writes to a file
-        invoke.reject("Print to PDF not yet implemented on Android. Use PrintManager for printing.")
+        mainHandler.post {
+            try {
+                // Get content dimensions
+                val contentWidth = wv.width
+                val contentHeight = (wv.contentHeight * wv.scale).roundToInt()
+
+                if (contentWidth <= 0 || contentHeight <= 0) {
+                    invoke.reject("WebView has no content")
+                    return@post
+                }
+
+                // Create PDF document
+                val document = PdfDocument()
+
+                // Calculate page size (A4 in points: 595 x 842)
+                val pageWidth = args.pageWidth?.times(72)?.roundToInt() ?: 595
+                val pageHeight = args.pageHeight?.times(72)?.roundToInt() ?: 842
+
+                // Calculate scale to fit content width to page
+                val scale = pageWidth.toFloat() / contentWidth.toFloat()
+                val scaledContentHeight = (contentHeight * scale).roundToInt()
+
+                // Calculate number of pages needed
+                val numPages = ((scaledContentHeight + pageHeight - 1) / pageHeight).coerceAtLeast(1)
+
+                // Create a bitmap of the full content
+                val bitmap = Bitmap.createBitmap(contentWidth, contentHeight, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bitmap)
+                wv.draw(canvas)
+
+                // Create pages
+                for (pageNum in 0 until numPages) {
+                    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+                    val page = document.startPage(pageInfo)
+
+                    val pageCanvas = page.canvas
+                    pageCanvas.scale(scale, scale)
+                    pageCanvas.translate(0f, -pageNum * (pageHeight / scale))
+                    pageCanvas.drawBitmap(bitmap, 0f, 0f, null)
+
+                    document.finishPage(page)
+                }
+
+                bitmap.recycle()
+
+                // Write to byte array
+                val outputStream = ByteArrayOutputStream()
+                document.writeTo(outputStream)
+                document.close()
+
+                val base64 = android.util.Base64.encodeToString(
+                    outputStream.toByteArray(),
+                    android.util.Base64.NO_WRAP
+                )
+
+                val ret = JSObject()
+                ret.put("success", true)
+                ret.put("value", base64)
+                invoke.resolve(ret)
+            } catch (e: Exception) {
+                invoke.reject("Print to PDF failed: ${e.message}")
+            }
+        }
     }
 
     /**
