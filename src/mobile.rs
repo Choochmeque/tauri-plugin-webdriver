@@ -1,4 +1,6 @@
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{
     plugin::{PluginApi, PluginHandle},
     AppHandle, Runtime,
@@ -21,3 +23,59 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 
 /// Access to the webdriver APIs.
 pub struct Webdriver<R: Runtime>(pub PluginHandle<R>);
+
+// =============================================================================
+// Shared Plugin Method Arguments (Android & iOS)
+// =============================================================================
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluateJsArgs {
+    pub script: String,
+    pub timeout_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TouchArgs {
+    pub r#type: String,
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenshotArgs {
+    pub timeout_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendAlertTextArgs {
+    pub prompt_text: String,
+}
+
+// =============================================================================
+// Shared Plugin Method Responses (Android & iOS)
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct JsResult {
+    pub success: bool,
+    pub value: Option<Value>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AlertResult {
+    pub message: Option<String>,
+    pub r#type: Option<String>,
+    #[serde(rename = "defaultText")]
+    pub default_text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ViewportResult {
+    pub width: u32,
+    pub height: u32,
+}

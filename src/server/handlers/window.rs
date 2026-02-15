@@ -72,9 +72,9 @@ pub async fn close_window<R: Runtime>(
     #[cfg(mobile)]
     {
         let _ = (state, session_id);
-        return Err(WebDriverErrorResponse::unsupported_operation(
+        Err(WebDriverErrorResponse::unsupported_operation(
             "Closing windows is not supported on mobile platforms",
-        ));
+        ))
     }
 
     #[cfg(desktop)]

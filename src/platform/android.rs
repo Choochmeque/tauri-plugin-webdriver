@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 
-use crate::mobile::Webdriver;
+use crate::mobile::{
+    AlertResult, EvaluateJsArgs, JsResult, ScreenshotArgs, SendAlertTextArgs, TouchArgs,
+    ViewportResult, Webdriver,
+};
 use crate::platform::{
     wrap_script_for_frame_context, Cookie, FrameId, PlatformExecutor, PointerEventType,
     PrintOptions, WindowRect,
@@ -30,35 +33,14 @@ impl<R: Runtime> AndroidExecutor<R> {
 }
 
 // =============================================================================
-// Plugin Method Arguments
+// Android-specific Plugin Method Arguments
 // =============================================================================
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EvaluateJsArgs {
-    script: String,
-    timeout_ms: u64,
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AsyncScriptArgs {
     async_id: String,
     script: String,
-    timeout_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TouchArgs {
-    r#type: String,
-    x: i32,
-    y: i32,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ScreenshotArgs {
     timeout_ms: u64,
 }
 
@@ -92,36 +74,14 @@ struct DeleteCookieArgs {
 }
 
 // =============================================================================
-// Plugin Method Responses
+// Android-specific Plugin Method Responses
 // =============================================================================
-
-#[derive(Debug, Deserialize)]
-struct JsResult {
-    success: bool,
-    value: Option<Value>,
-    error: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AlertResult {
-    message: Option<String>,
-    r#type: Option<String>,
-    #[serde(rename = "defaultText")]
-    default_text: Option<String>,
-}
 
 #[derive(Debug, Deserialize)]
 struct CookiesResult {
     success: bool,
     cookies: Option<String>, // JSON array as string
     error: Option<String>,
-}
-
-/// Register webview handlers on Android (placeholder - no-op for now)
-pub fn register_webview_handlers<R: Runtime>(_webview: &tauri::Webview<R>) {
-    // On Android, alert handling is done via the plugin's WebChromeClient
-    // which is set up during plugin initialization
-    tracing::debug!("Android webview handlers registered (via plugin)");
 }
 
 #[async_trait]
@@ -164,10 +124,12 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
                 "value": value
             }))
         } else {
-            Err(WebDriverErrorResponse::javascript_error(
-                result.error.as_deref().unwrap_or("Unknown error"),
-                None,
-            ))
+            let error_msg = result.error.as_deref().unwrap_or("Unknown error");
+            if error_msg.to_lowercase().contains("timeout") {
+                Err(WebDriverErrorResponse::script_timeout())
+            } else {
+                Err(WebDriverErrorResponse::javascript_error(error_msg, None))
+            }
         }
     }
 
@@ -238,10 +200,12 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
             };
             Ok(value)
         } else {
-            Err(WebDriverErrorResponse::javascript_error(
-                result.error.as_deref().unwrap_or("Unknown error"),
-                None,
-            ))
+            let error_msg = result.error.as_deref().unwrap_or("Unknown error");
+            if error_msg.to_lowercase().contains("timeout") {
+                Err(WebDriverErrorResponse::script_timeout())
+            } else {
+                Err(WebDriverErrorResponse::javascript_error(error_msg, None))
+            }
         }
     }
 
@@ -409,12 +373,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
     async fn send_alert_text(&self, text: &str) -> Result<(), WebDriverErrorResponse> {
         let webdriver = self.window.app_handle().state::<Webdriver<R>>();
 
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct SendAlertTextArgs {
-            prompt_text: String,
-        }
-
         let _result: Value = webdriver
             .0
             .run_mobile_plugin_async(
@@ -566,12 +524,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for AndroidExecutor<R> {
     async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         // Get viewport size from Kotlin plugin
         let webdriver = self.window.app_handle().state::<Webdriver<R>>();
-
-        #[derive(Debug, Deserialize)]
-        struct ViewportResult {
-            width: u32,
-            height: u32,
-        }
 
         let result: ViewportResult = webdriver
             .0

@@ -1,10 +1,11 @@
 pub(crate) mod alert_state;
-mod async_state;
 mod executor;
 
 pub use alert_state::AlertStateManager;
-pub use async_state::AsyncScriptState;
 pub use executor::*;
+
+#[cfg(target_os = "windows")]
+pub use windows::AsyncScriptState;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -86,6 +87,7 @@ pub fn create_executor<R: Runtime + 'static>(
 
 /// Register platform-specific webview handlers at webview creation time.
 /// This is called from the plugin's `on_webview_ready` hook.
+/// Note: Mobile platforms (Android/iOS) handle this via native plugins.
 pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     #[cfg(target_os = "windows")]
     windows::register_webview_handlers(webview);
@@ -93,8 +95,6 @@ pub fn register_webview_handlers<R: Runtime>(webview: &tauri::Webview<R>) {
     macos::register_webview_handlers(webview);
     #[cfg(target_os = "linux")]
     linux::register_webview_handlers(webview);
-    #[cfg(target_os = "android")]
-    android::register_webview_handlers(webview);
-    #[cfg(target_os = "ios")]
-    ios::register_webview_handlers(webview);
+
+    let _ = webview; // Avoid unused variable warning on platforms without handlers
 }

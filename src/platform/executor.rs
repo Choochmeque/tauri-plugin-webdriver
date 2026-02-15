@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::webview::Cookie as TauriCookie;
-use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
+use tauri::{Runtime, WebviewWindow};
+
+#[cfg(desktop)]
+use tauri::{PhysicalPosition, PhysicalSize};
 
 use tauri::Manager;
 

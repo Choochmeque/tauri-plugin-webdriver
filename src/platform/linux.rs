@@ -8,10 +8,9 @@ use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webkit2gtk::{PrintOperationExt, ScriptDialogType, UserContentManagerExt, WebViewExt};
+use webkit2gtk::{PrintOperationExt, ScriptDialogType, WebViewExt};
 
 use crate::platform::alert_state::{AlertStateManager, AlertType, PendingAlert};
-use crate::platform::async_state::{AsyncScriptState, HANDLER_NAME};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
 use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::Timeouts;
@@ -352,7 +351,6 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // Async Script Execution
     // =========================================================================
 
-    #[allow(clippy::too_many_lines)]
     async fn execute_async_script(
         &self,
         script: &str,
@@ -361,87 +359,11 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
         let args_json = serde_json::to_string(args)
             .map_err(|e| WebDriverErrorResponse::invalid_argument(&e.to_string()))?;
 
-        let async_id = uuid::Uuid::new_v4().to_string();
-
-        // Get async state from Tauri's managed state
-        let app = self.window.app_handle().clone();
-        let async_state = app.state::<AsyncScriptState>();
-
-        // Register native message handler if not already registered for this window
-        let label = self.window.label().to_string();
-        if !async_state.mark_handler_registered(&label) {
-            let app_clone = app.clone();
-            let handler_result = self.window.with_webview(move |webview| {
-                let webview = webview.inner().clone();
-                let state = app_clone.state::<AsyncScriptState>();
-                let state_ptr = state.inner() as *const AsyncScriptState;
-
-                // Get the UserContentManager and register our handler
-                if let Some(manager) = webview.user_content_manager() {
-                    // Register the script message handler
-                    let _ = manager.register_script_message_handler(HANDLER_NAME);
-
-                    // Connect to receive messages
-                    // SAFETY: state_ptr is valid for the lifetime of the app
-                    manager.connect_script_message_received(
-                        Some(HANDLER_NAME),
-                        move |_manager, result| {
-                            let state = unsafe { &*state_ptr };
-
-                            // Get the JavaScript value from the result
-                            let js_value = result.js_value();
-                            let Some(js_value) = js_value else {
-                                return;
-                            };
-
-                            // Convert to JSON
-                            let Some(json_str) = js_value.to_json(0) else {
-                                return;
-                            };
-
-                            // Parse the message
-                            let msg: Value = match serde_json::from_str(json_str.as_str()) {
-                                Ok(v) => v,
-                                Err(_) => return,
-                            };
-
-                            // Extract async ID
-                            let async_id = match msg.get("id").and_then(Value::as_str) {
-                                Some(id) => id.to_string(),
-                                None => return,
-                            };
-
-                            // Check for error
-                            if let Some(error) = msg.get("error").and_then(Value::as_str) {
-                                if !error.is_empty() {
-                                    state.complete(&async_id, Err(error.to_string()));
-                                    return;
-                                }
-                            }
-
-                            // Extract result
-                            let result = msg.get("result").cloned().unwrap_or(Value::Null);
-                            state.complete(&async_id, Ok(result));
-                        },
-                    );
-
-                    tracing::debug!("Registered native message handler for webview");
-                }
-            });
-
-            if let Err(e) = handler_result {
-                return Err(WebDriverErrorResponse::unknown_error(&format!(
-                    "Failed to register message handler: {e}"
-                )));
-            }
-        }
-
-        // Register pending operation
-        let rx = async_state.register(async_id.clone());
-
-        // Build wrapper with native postMessage (WebKitGTK uses same API as macOS WebKit)
+        // Build wrapper that includes argument deserialization
+        // call_async_javascript_function handles Promises natively - we wrap the script in a Promise
+        // and provide __done via closure
         let wrapper = format!(
-            r"(function() {{
+            r"return new Promise((resolve, reject) => {{
                 var ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
                 function deserializeArg(arg) {{
                     if (arg === null || arg === undefined) return arg;
@@ -460,41 +382,72 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
                     }}
                     return arg;
                 }}
-                var __done = function(r) {{
-                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
-                        id: '{async_id}',
-                        result: r,
-                        error: null
-                    }});
+                var __done = function(result, error) {{
+                    if (error) {{
+                        reject(new Error(typeof error === 'string' ? error : String(error)));
+                    }} else {{
+                        resolve(result);
+                    }}
                 }};
                 var __args = {args_json}.map(deserializeArg);
                 __args.push(__done);
                 try {{
                     (function() {{ {script} }}).apply(null, __args);
                 }} catch (e) {{
-                    window.webkit.messageHandlers.{HANDLER_NAME}.postMessage({{
-                        id: '{async_id}',
-                        result: null,
-                        error: e.message || String(e)
-                    }});
+                    reject(e);
                 }}
-            }})()"
+            }});"
         );
 
-        // Execute the wrapper (returns immediately)
-        self.evaluate_js(&wrapper).await?;
+        let (tx, rx) = oneshot::channel();
 
-        // Wait for result with timeout
+        let result = self.window.with_webview(move |webview| {
+            let webview = webview.inner().clone();
+            let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
+
+            // Use glib main context to spawn the async future
+            let ctx = MainContext::default();
+            ctx.spawn_local(async move {
+                // call_async_javascript_function_future handles Promises natively
+                let result = webview
+                    .call_async_javascript_function_future(&wrapper, None, None, None)
+                    .await;
+
+                let response: Result<Value, String> = match result {
+                    Ok(js_value) => {
+                        if let Some(json_str) = js_value.to_json(0) {
+                            match serde_json::from_str::<Value>(json_str.as_str()) {
+                                Ok(value) => Ok(value),
+                                Err(_) => Ok(Value::String(json_str.to_string())),
+                            }
+                        } else {
+                            Ok(Value::Null)
+                        }
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(response);
+                    }
+                }
+            });
+        });
+
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::javascript_error(
+                &e.to_string(),
+                None,
+            ));
+        }
+
         let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
-
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(Ok(value))) => Ok(value),
             Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::javascript_error(&error, None)),
             Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
-            Err(_) => {
-                async_state.cancel(&async_id);
-                Err(WebDriverErrorResponse::script_timeout())
-            }
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }
 }
