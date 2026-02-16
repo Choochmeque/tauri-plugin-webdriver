@@ -175,6 +175,9 @@ jobs:
           fi
           echo "Using simulator: $SIMULATOR_ID"
           xcrun simctl boot "$SIMULATOR_ID" || true
+          # Wait for simulator to fully boot
+          echo "Waiting for simulator to boot..."
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
 
       - name: Install and launch app on Simulator
