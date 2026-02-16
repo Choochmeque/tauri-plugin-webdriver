@@ -203,13 +203,17 @@ jobs:
           # Workaround for iOS 18.4-18.5 simulator bug with libswiftWebKit.dylib
           # See: https://github.com/pichillilorenzo/flutter_inappwebview/issues/2636
           echo "=== Setting up Swift library path workaround ==="
-          RUNTIME_PATH=$(xcrun simctl list runtimes -v 2>/dev/null | grep -E "iOS.*SimRuntime" | head -1 | awk '{print $NF}')
+          echo "Available runtimes:"
+          xcrun simctl list runtimes -v 2>/dev/null || true
+          # Extract the full path to the iOS runtime
+          RUNTIME_PATH=$(xcrun simctl list runtimes -v 2>/dev/null | grep -oE '/Library/Developer/CoreSimulator[^)]+iOS[^)]+\.simruntime' | head -1)
           echo "Runtime path: $RUNTIME_PATH"
           SWIFT_LIB_PATH="$RUNTIME_PATH/Contents/Resources/RuntimeRoot/System/Cryptexes/OS/usr/lib/swift"
           echo "Swift lib path: $SWIFT_LIB_PATH"
 
-          # Launch the app with the library path fix
-          xcrun simctl launch --env DYLD_FALLBACK_LIBRARY_PATH="$SWIFT_LIB_PATH" "$SIMULATOR_ID" "$BUNDLE_ID"
+          # Launch the app with the library path fix (SIMCTL_CHILD_ prefix passes env to the app)
+          export SIMCTL_CHILD_DYLD_FALLBACK_LIBRARY_PATH="$SWIFT_LIB_PATH"
+          xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"
 
           # Give the app a moment to initialize
           sleep 3
