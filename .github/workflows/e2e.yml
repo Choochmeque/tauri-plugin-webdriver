@@ -178,6 +178,9 @@ jobs:
           # Wait for simulator to fully boot
           echo "Waiting for simulator to boot..."
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          # Give the simulator extra time to be fully ready for app launches
+          echo "Waiting for simulator to be ready for apps..."
+          sleep 10
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
 
       - name: Install and launch app on Simulator
@@ -189,7 +192,19 @@ jobs:
           # Get bundle ID from Info.plist
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print:CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Launching app with bundle ID: $BUNDLE_ID"
-          xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"
+          # Retry app launch up to 5 times with delays
+          for attempt in {1..5}; do
+            if xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"; then
+              echo "App launched successfully on attempt $attempt"
+              break
+            fi
+            if [ $attempt -eq 5 ]; then
+              echo "Failed to launch app after 5 attempts"
+              exit 1
+            fi
+            echo "Launch attempt $attempt failed, retrying in 5 seconds..."
+            sleep 5
+          done
           # Poll WebDriver server until ready (max 60 seconds)
           echo "Waiting for WebDriver server..."
           for i in {1..60}; do
