@@ -200,19 +200,19 @@ jobs:
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print:CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Launching app with bundle ID: $BUNDLE_ID"
 
-          # Launch with console output to capture crash messages
-          # Run in background and capture output
-          xcrun simctl launch --console-pty "$SIMULATOR_ID" "$BUNDLE_ID" > /tmp/app_console.log 2>&1 &
-          LAUNCH_PID=$!
+          # Workaround for iOS 18.4-18.5 simulator bug with libswiftWebKit.dylib
+          # See: https://github.com/pichillilorenzo/flutter_inappwebview/issues/2636
+          echo "=== Setting up Swift library path workaround ==="
+          RUNTIME_PATH=$(xcrun simctl list runtimes -v 2>/dev/null | grep -E "iOS.*SimRuntime" | head -1 | awk '{print $NF}')
+          echo "Runtime path: $RUNTIME_PATH"
+          SWIFT_LIB_PATH="$RUNTIME_PATH/Contents/Resources/RuntimeRoot/System/Cryptexes/OS/usr/lib/swift"
+          echo "Swift lib path: $SWIFT_LIB_PATH"
 
-          # Wait a moment for the app to start (or crash)
-          sleep 5
+          # Launch the app with the library path fix
+          xcrun simctl launch --env DYLD_FALLBACK_LIBRARY_PATH="$SWIFT_LIB_PATH" "$SIMULATOR_ID" "$BUNDLE_ID"
 
-          # Check if app is running
-          if ! ps -p $LAUNCH_PID > /dev/null 2>&1; then
-            echo "=== App console output (crash log) ==="
-            cat /tmp/app_console.log || true
-          fi
+          # Give the app a moment to initialize
+          sleep 3
           # Poll WebDriver server until ready (max 60 seconds)
           echo "Waiting for WebDriver server..."
           for i in {1..60}; do
@@ -222,12 +222,14 @@ jobs:
             fi
             if [ $i -eq 60 ]; then
               echo "WebDriver server did not start within 60s"
-              echo "=== App console output ==="
-              cat /tmp/app_console.log 2>/dev/null || echo "No console output"
               echo "=== Checking if app is running ==="
-              ps aux | grep -i tauri || true
+              xcrun simctl spawn "$SIMULATOR_ID" launchctl list | grep -i tauri || echo "App not running"
               echo "=== Checking ports ==="
               lsof -i :4445 || echo "Nothing listening on port 4445"
+              echo "=== Device logs (last 2 min) ==="
+              xcrun simctl spawn "$SIMULATOR_ID" log show --last 2m --predicate 'process CONTAINS "tauri" OR eventMessage CONTAINS "tauri" OR eventMessage CONTAINS "webdriver"' --style compact 2>&1 | tail -100 || true
+              echo "=== Crash/termination logs ==="
+              xcrun simctl spawn "$SIMULATOR_ID" log show --last 2m --predicate 'eventMessage CONTAINS "terminated" OR eventMessage CONTAINS "crash" OR eventMessage CONTAINS "SIGKILL" OR eventMessage CONTAINS "SIGABRT"' --style compact 2>&1 | tail -50 || true
               exit 1
             fi
             # Print progress every 10 seconds
