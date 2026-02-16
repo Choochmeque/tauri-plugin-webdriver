@@ -187,8 +187,19 @@ jobs:
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print:CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Launching app with bundle ID: $BUNDLE_ID"
           xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"
-          # Give app time to start and WebDriver server to initialize
-          sleep 5
+          # Poll WebDriver server until ready (max 60 seconds)
+          echo "Waiting for WebDriver server..."
+          for i in {1..60}; do
+            if curl -s http://127.0.0.1:4445/status > /dev/null 2>&1; then
+              echo "WebDriver server ready after ${i}s"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "WebDriver server did not start within 60s"
+              exit 1
+            fi
+            sleep 1
+          done
 
       - name: Run iOS e2e tests
         working-directory: examples/tauri-app
