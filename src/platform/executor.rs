@@ -24,7 +24,9 @@ pub struct ElementRect {
 /// Window rectangle (position and size)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WindowRect {
+    #[serde(default)]
     pub x: i32,
+    #[serde(default)]
     pub y: i32,
     pub width: u32,
     pub height: u32,

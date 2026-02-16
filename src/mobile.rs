@@ -69,13 +69,4 @@ pub struct JsResult {
 #[derive(Debug, Deserialize)]
 pub struct AlertResult {
     pub message: Option<String>,
-    pub r#type: Option<String>,
-    #[serde(rename = "defaultText")]
-    pub default_text: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ViewportResult {
-    pub width: u32,
-    pub height: u32,
 }

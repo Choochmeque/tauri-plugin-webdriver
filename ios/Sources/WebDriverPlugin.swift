@@ -359,9 +359,7 @@ class WebDriverPlugin: Plugin, WKUIDelegate {
 
         if let alert = alert {
             invoke.resolve([
-                "message": alert.message,
-                "type": alert.type,
-                "defaultText": alert.defaultText as Any
+                "message": alert.message
             ])
         } else {
             invoke.reject("no such alert")

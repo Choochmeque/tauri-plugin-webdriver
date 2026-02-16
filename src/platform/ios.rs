@@ -4,8 +4,7 @@ use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 
 use crate::mobile::{
-    AlertResult, EvaluateJsArgs, JsResult, ScreenshotArgs, SendAlertTextArgs, TouchArgs,
-    ViewportResult, Webdriver,
+    AlertResult, EvaluateJsArgs, JsResult, ScreenshotArgs, SendAlertTextArgs, TouchArgs, Webdriver,
 };
 use crate::platform::{
     wrap_script_for_frame_context, FrameId, PlatformExecutor, PointerEventType, PrintOptions,
@@ -343,17 +342,10 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for IOSExecutor<R> {
         // Get viewport size from Swift plugin
         let webdriver = self.window.app_handle().state::<Webdriver<R>>();
 
-        let result: ViewportResult = webdriver
+        webdriver
             .0
             .run_mobile_plugin_async("getViewportSize", ())
             .await
-            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))?;
-
-        Ok(WindowRect {
-            x: 0,
-            y: 0,
-            width: result.width,
-            height: result.height,
-        })
+            .map_err(|e| WebDriverErrorResponse::unknown_error(&e.to_string()))
     }
 }

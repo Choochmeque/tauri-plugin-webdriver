@@ -472,8 +472,6 @@ class WebDriverPlugin(private val activity: Activity) : Plugin(activity) {
             if (alert != null) {
                 val ret = JSObject()
                 ret.put("message", alert.message)
-                ret.put("type", alert.type)
-                ret.put("defaultText", alert.defaultText)
                 invoke.resolve(ret)
             } else {
                 invoke.reject("no such alert")
