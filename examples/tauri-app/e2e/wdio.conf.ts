@@ -40,7 +40,7 @@ export const config: Options.Testrunner = {
   port: WEBDRIVER_PORT,
   path: '/',
 
-  logLevel: 'info',
+  logLevel: 'warn',
 
   bail: 0,
 
