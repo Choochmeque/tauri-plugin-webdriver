@@ -78,6 +78,18 @@
       <button data-testid="disabled-button" disabled>Disabled Button</button>
       <button data-testid="enabled-button">Enabled Button</button>
     </section>
+
+    <section data-testid="rect-section" class="test-section">
+      <h2 data-testid="rect-heading">Element Rect Test</h2>
+      <div class="rect-container">
+        <div
+          data-testid="positioned-element"
+          style="position: absolute; left: 50px; top: 50px; width: 100px; height: 80px; background: #4a9eff;"
+        >
+          Positioned
+        </div>
+      </div>
+    </section>
   {/if}
 </main>
 
@@ -119,5 +131,13 @@
   .test-section h2 {
     margin-top: 0;
     font-size: 1rem;
+  }
+
+  .rect-container {
+    position: relative;
+    width: 300px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
   }
 </style>

@@ -248,6 +248,37 @@ describe('Element Operations', () => {
         expect(size.width).toBeGreaterThan(0);
         expect(size.height).toBeGreaterThan(0);
       });
+
+      it('should return exact size for positioned element', async () => {
+        // Scroll section into view first
+        const section = await $('[data-testid="rect-section"]');
+        await section.scrollIntoView();
+
+        // Element has fixed size: width: 100px, height: 80px
+        const element = await $('[data-testid="positioned-element"]');
+        const size = await element.getSize();
+
+        expect(size.width).toBe(100);
+        expect(size.height).toBe(80);
+      });
+
+      it('should return correct position relative to container', async () => {
+        // Scroll section into view first
+        const section = await $('[data-testid="rect-section"]');
+        await section.scrollIntoView();
+
+        // Element is positioned at left: 50px, top: 50px relative to container
+        // Container has 1px border, so element is at container + 50 + 1 = container + 51
+        const container = await $('.rect-container');
+        const element = await $('[data-testid="positioned-element"]');
+
+        const containerLocation = await container.getLocation();
+        const elementLocation = await element.getLocation();
+
+        // Element should be 51px offset from container (50px position + 1px border)
+        expect(elementLocation.x).toBe(containerLocation.x + 51);
+        expect(elementLocation.y).toBe(containerLocation.y + 51);
+      });
     });
 
     describe('Displayed State', () => {
