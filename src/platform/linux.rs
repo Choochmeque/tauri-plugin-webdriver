@@ -8,7 +8,9 @@ use javascriptcore::ValueExt;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::oneshot;
-use webkit2gtk::{PrintOperationExt, ScriptDialogType, WebViewExt};
+use webkit2gtk::{
+    PrintOperationExt, ScriptDialogType, SnapshotOptions, SnapshotRegion, WebViewExt,
+};
 
 use crate::platform::alert_state::{AlertStateManager, AlertType, PendingAlert};
 use crate::platform::{wrap_script_for_frame_context, FrameId, PlatformExecutor, PrintOptions};
@@ -193,28 +195,60 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
     // =========================================================================
 
     async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
-        // Use JavaScript canvas-based screenshot
-        let script = r"(function() {
-            return new Promise(function(resolve, reject) {
-                try {
-                    var canvas = document.createElement('canvas');
-                    var ctx = canvas.getContext('2d');
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
+        // Use WebKitGTK's native snapshot API
+        let (tx, rx) = oneshot::channel();
 
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let result = self.window.with_webview(move |webview| {
+            let webview = webview.inner().clone();
+            let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
-                    var dataUrl = canvas.toDataURL('image/png');
-                    resolve(dataUrl.replace('data:image/png;base64,', ''));
-                } catch (e) {
-                    reject(e.message);
+            // Use glib main context to spawn the async future
+            let ctx = MainContext::default();
+            ctx.spawn_local(async move {
+                // Take snapshot of visible content
+                let result = webview
+                    .snapshot_future(SnapshotRegion::Visible, SnapshotOptions::NONE)
+                    .await;
+
+                let response: Result<String, String> = match result {
+                    Ok(surface) => {
+                        // Write Cairo surface to PNG in memory
+                        let mut png_data: Vec<u8> = Vec::new();
+                        match surface.write_to_png(&mut png_data) {
+                            Ok(()) => Ok(BASE64_STANDARD.encode(&png_data)),
+                            Err(e) => Err(format!("Failed to write PNG: {e}")),
+                        }
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(response);
+                    }
                 }
             });
-        })()";
+        });
 
-        let result = self.evaluate_js(script).await?;
-        extract_string_value(&result)
+        if let Err(e) = result {
+            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
+        }
+
+        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(Ok(base64))) => {
+                if base64.is_empty() {
+                    Err(WebDriverErrorResponse::unknown_error(
+                        "Screenshot returned empty data",
+                    ))
+                } else {
+                    Ok(base64)
+                }
+            }
+            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
+            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
+            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
+        }
     }
 
     async fn take_element_screenshot(
@@ -450,21 +484,4 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
             Err(_) => Err(WebDriverErrorResponse::script_timeout()),
         }
     }
-}
-
-/// Extract string value from JavaScript result
-fn extract_string_value(result: &Value) -> Result<String, WebDriverErrorResponse> {
-    if let Some(success) = result.get("success").and_then(Value::as_bool) {
-        if success {
-            if let Some(value) = result.get("value") {
-                if let Some(s) = value.as_str() {
-                    return Ok(s.to_string());
-                }
-                return Ok(value.to_string());
-            }
-        } else if let Some(error) = result.get("error").and_then(Value::as_str) {
-            return Err(WebDriverErrorResponse::javascript_error(error, None));
-        }
-    }
-    Ok(String::new())
 }
