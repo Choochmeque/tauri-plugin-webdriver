@@ -214,7 +214,18 @@ jobs:
             fi
             if [ $i -eq 60 ]; then
               echo "WebDriver server did not start within 60s"
+              echo "=== Checking if app is running ==="
+              ps aux | grep -i tauri || true
+              echo "=== Checking ports ==="
+              lsof -i :4445 || echo "Nothing listening on port 4445"
+              echo "=== Simulator logs ==="
+              xcrun simctl spawn "$SIMULATOR_ID" log show --predicate 'process == "tauri-app"' --last 2m --style compact || true
               exit 1
+            fi
+            # Print progress every 10 seconds
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Still waiting... ${i}s"
+              lsof -i :4445 || true
             fi
             sleep 1
           done
