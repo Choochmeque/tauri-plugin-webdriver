@@ -177,11 +177,18 @@ jobs:
           xcrun simctl boot "$SIMULATOR_ID" || true
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
 
-      - name: Install app on Simulator
+      - name: Install and launch app on Simulator
         working-directory: examples/tauri-app
         run: |
           APP_PATH=$(find src-tauri/gen/apple/build -name "*.app" -type d | head -1)
+          echo "Installing app: $APP_PATH"
           xcrun simctl install "$SIMULATOR_ID" "$APP_PATH"
+          # Get bundle ID from Info.plist
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print:CFBundleIdentifier" "$APP_PATH/Info.plist")
+          echo "Launching app with bundle ID: $BUNDLE_ID"
+          xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"
+          # Give app time to start and WebDriver server to initialize
+          sleep 5
 
       - name: Run iOS e2e tests
         working-directory: examples/tauri-app
