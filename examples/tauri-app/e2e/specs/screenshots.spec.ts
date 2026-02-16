@@ -1,6 +1,6 @@
 import { isValidBase64Png, navigateToTestPage } from '../helpers/test-utils.js';
 
-describe.skip('Screenshots', () => {
+describe('Screenshots', () => {
   beforeEach(async () => {
     await navigateToTestPage('main');
   });
