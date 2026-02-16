@@ -325,55 +325,7 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for MacOSExecutor<R> {
         );
         self.evaluate_js(&script).await?;
 
-        // For now, take full screenshot - element clipping can be done in Phase 4
-        // with proper WKSnapshotConfiguration rect clipping
-        let (tx, rx) = oneshot::channel();
-
-        let result = self.window.with_webview(move |webview| {
-            unsafe {
-                let wk_webview: &WKWebView = &*webview.inner().cast();
-                let mtm = MainThreadMarker::new_unchecked();
-                let config = WKSnapshotConfiguration::new(mtm);
-
-                // Set clip rect for element
-                // Note: WKSnapshotConfiguration has afterScreenUpdates and rect properties
-                // We'd set config.setRect(CGRect) here for proper element clipping
-
-                let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
-                let block = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
-                    let response = if !error.is_null() {
-                        let error_ref = &*error;
-                        let description = error_ref.localizedDescription();
-                        Err(description.to_string())
-                    } else if image.is_null() {
-                        Err("No image returned".to_string())
-                    } else {
-                        let image_ref = &*image;
-                        image_to_png_base64(image_ref)
-                    };
-
-                    if let Ok(mut guard) = tx.lock() {
-                        if let Some(tx) = guard.take() {
-                            let _ = tx.send(response);
-                        }
-                    }
-                });
-
-                wk_webview.takeSnapshotWithConfiguration_completionHandler(Some(&config), &block);
-            }
-        });
-
-        if let Err(e) = result {
-            return Err(WebDriverErrorResponse::unknown_error(&e.to_string()));
-        }
-
-        let timeout = std::time::Duration::from_millis(self.timeouts.script_ms);
-        match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(Ok(base64))) => Ok(base64),
-            Ok(Ok(Err(error))) => Err(WebDriverErrorResponse::unknown_error(&error)),
-            Ok(Err(_)) => Err(WebDriverErrorResponse::unknown_error("Channel closed")),
-            Err(_) => Err(WebDriverErrorResponse::script_timeout()),
-        }
+        self.take_screenshot().await
     }
 
     // =========================================================================
