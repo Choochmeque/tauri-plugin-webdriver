@@ -166,8 +166,14 @@ jobs:
 
       - name: Boot iOS Simulator
         run: |
-          # List available simulators and boot iPhone 15
-          SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15" | head -1 | grep -oE '[0-9A-F-]{36}')
+          # List available simulators and find iPhone
+          xcrun simctl list devices available
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep -E "iPhone (15|16)" | head -1 | grep -oE '[0-9A-Fa-f-]{36}')
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No iPhone simulator found, using first available"
+            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | grep -oE '[0-9A-Fa-f-]{36}')
+          fi
+          echo "Using simulator: $SIMULATOR_ID"
           xcrun simctl boot "$SIMULATOR_ID" || true
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
 
