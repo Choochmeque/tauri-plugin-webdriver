@@ -218,8 +218,16 @@ jobs:
               ps aux | grep -i tauri || true
               echo "=== Checking ports ==="
               lsof -i :4445 || echo "Nothing listening on port 4445"
-              echo "=== Simulator logs ==="
-              xcrun simctl spawn "$SIMULATOR_ID" log show --predicate 'process == "tauri-app"' --last 2m --style compact || true
+              echo "=== Host crash logs ==="
+              find ~/Library/Logs/DiagnosticReports -name "*tauri*" -mmin -5 2>/dev/null | head -5 | xargs cat 2>/dev/null || echo "No host crash logs"
+              echo "=== Simulator crash logs ==="
+              DEVICE_DATA=$(xcrun simctl get_app_container "$SIMULATOR_ID" test.tauri.webdriver data 2>/dev/null || true)
+              echo "App data container: $DEVICE_DATA"
+              find ~/Library/Developer/CoreSimulator/Devices/"$SIMULATOR_ID" -name "*.crash" -o -name "*.ips" 2>/dev/null | head -5 | xargs cat 2>/dev/null || echo "No simulator crash logs"
+              echo "=== Simulator system log ==="
+              xcrun simctl spawn "$SIMULATOR_ID" log show --last 2m --predicate 'process CONTAINS "tauri" OR process CONTAINS "SpringBoard" OR eventMessage CONTAINS "crash"' --style compact 2>&1 | tail -200 || true
+              echo "=== All recent process crashes ==="
+              log show --last 5m --predicate 'eventMessage CONTAINS "crashed" OR eventMessage CONTAINS "tauri"' --style compact 2>&1 | tail -50 || true
               exit 1
             fi
             # Print progress every 10 seconds
