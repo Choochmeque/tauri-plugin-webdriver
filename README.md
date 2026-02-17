@@ -30,7 +30,7 @@ Add to your `Cargo.toml` as a dev/test-only dependency:
 
 ```toml
 [target.'cfg(debug_assertions)'.dependencies]
-tauri-plugin-webdriver = "0.1"
+tauri-plugin-webdriver = "0.2"
 ```
 
 Or use a feature flag for more control:
