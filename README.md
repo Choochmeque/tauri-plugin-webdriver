@@ -40,7 +40,7 @@ Or use a feature flag for more control:
 webdriver = ["tauri-plugin-webdriver"]
 
 [dependencies]
-tauri-plugin-webdriver = { version = "0.1", optional = true }
+tauri-plugin-webdriver = { version = "0.2", optional = true }
 ```
 
 ## Usage
