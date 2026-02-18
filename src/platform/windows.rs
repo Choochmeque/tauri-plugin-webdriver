@@ -661,6 +661,8 @@ mod handlers {
                 // Read PNG data from the stream
                 unsafe {
                     use super::{STATFLAG_NONAME, STREAM_SEEK_SET};
+                    use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+                    use base64::Engine as _;
 
                     // Get stream size
                     let mut stat = std::mem::zeroed();

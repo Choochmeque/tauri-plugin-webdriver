@@ -19,6 +19,7 @@ ignore = [
     "gdkwayland-sys",
     "gdkx11",
     "proc-macro-error",
+    "RUSTSEC-2024-0415",
     "RUSTSEC-2024-0429",
 ]
 
