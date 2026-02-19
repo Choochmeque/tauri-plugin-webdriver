@@ -212,11 +212,13 @@ impl<R: Runtime + 'static> PlatformExecutor<R> for LinuxExecutor<R> {
 
                 let response: Result<String, String> = match result {
                     Ok(surface) => {
-                        // Write Cairo surface to PNG in memory
                         let mut png_data: Vec<u8> = Vec::new();
-                        match surface.write_to_png(&mut png_data) {
-                            Ok(()) => Ok(BASE64_STANDARD.encode(&png_data)),
-                            Err(e) => Err(format!("Failed to write PNG: {e}")),
+                        match gtk::cairo::ImageSurface::try_from(surface) {
+                            Ok(image_surface) => match image_surface.write_to_png(&mut png_data) {
+                                Ok(()) => Ok(BASE64_STANDARD.encode(&png_data)),
+                                Err(e) => Err(format!("Failed to write PNG: {e}")),
+                            },
+                            Err(e) => Err(format!("Failed to downcast to ImageSurface: {e:?}")),
                         }
                     }
                     Err(e) => Err(e.to_string()),
