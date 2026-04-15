@@ -35,7 +35,7 @@ jobs:
             .
             examples/tauri-app/src-tauri
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -95,7 +95,7 @@ jobs:
             .
             examples/tauri-app/src-tauri
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -146,7 +146,7 @@ jobs:
             .
             examples/tauri-app/src-tauri
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -272,7 +272,7 @@ jobs:
 
   #     - uses: taiki-e/install-action@cargo-llvm-cov
 
-  #     - uses: pnpm/action-setup@v5
+  #     - uses: pnpm/action-setup@v6
   #       with:
   #         version: 9
 
