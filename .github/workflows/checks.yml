@@ -27,11 +27,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      - name: Refresh APT package index
+        if: runner.os == 'Linux'
+        run: sudo apt-get update
+        
       - uses: awalsh128/cache-apt-pkgs-action@latest
         if: matrix.os == 'ubuntu-latest'
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm-dev clang cmake grcov
-          version: "1.0"  # bump this to invalidate the cache when needed
+          packages: libglib2.0 libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm-dev clang cmake grcov
+          version: "1.1"  # bump this to invalidate the cache when needed
 
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
