@@ -620,7 +620,7 @@ define_class!(
             let response = rx.recv_timeout(timeout);
 
             // Return true if accepted, false if dismissed or timeout
-            let accepted = response.map(|r| r.accepted).unwrap_or(true);
+            let accepted = response.map_or(true, |r| r.accepted);
 
             completion_handler.call((objc2::runtime::Bool::from(accepted),));
         }
