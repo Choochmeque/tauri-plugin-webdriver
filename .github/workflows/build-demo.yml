@@ -80,13 +80,6 @@ jobs:
           cache-dependency-path: examples/tauri-app/pnpm-lock.yaml
       - working-directory: examples/tauri-app
         run: pnpm install
-      # The Google Services Gradle plugin needs `google-services.json` at
-      # build time but that file is gitignored (it carries Firebase
-      # credentials). CI copies the committed placeholder into place so the
-      # plugin loads — FCM won't work at runtime with these dummy values,
-      # but the build links and verifies the Android integration compiles.
-      - run: cp google-services.placeholder.json google-services.json
-        working-directory: examples/tauri-app/src-tauri/gen/android/app
       # `cargo-ndk` (used internally by `tauri android build`) needs
       # `NDK_HOME` / `ANDROID_NDK_HOME`. The runner image exposes
       # `ANDROID_NDK_LATEST_HOME` only as a shell variable (not in the
