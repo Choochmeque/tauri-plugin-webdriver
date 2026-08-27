@@ -34,8 +34,8 @@ importers:
         specifier: ^9.30.1
         version: 9.30.1(@wdio/globals@9.29.1)(webdriverio@9.31.2)
       '@wdio/mocha-framework':
-        specifier: ^9.30.1
-        version: 9.30.1
+        specifier: ^9.31.2
+        version: 9.31.2
       '@wdio/spec-reporter':
         specifier: ^9.5.1
         version: 9.24.0
@@ -1043,8 +1043,8 @@ packages:
     resolution: {integrity: sha512-0ZAEIo6PNyMIJPlOGkIgyOJUjcd0pC8/QHlVAAe1c91/IcjZ1X+k0yidXHaboJdN7dq1XPUacmhRdtua0U5EZg==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/mocha-framework@9.30.1':
-    resolution: {integrity: sha512-wGklhggr0kTMk6yDynCE+sdIQg+oSaHTDXWyXk0p0AGOjhTbm3sedg2fzawJLs/ecYjYS0VqPw/0JrBsWi3AaA==}
+  '@wdio/mocha-framework@9.31.2':
+    resolution: {integrity: sha512-avNsAZdmV7NGGd/6T55FK+ZasV9XRchI7AOR4iRULdI+T5vdoqdreydEhjcofwbZZTbAwSyVqzdLaz0iO6zysw==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/protocols@9.30.1':
@@ -1617,8 +1617,8 @@ packages:
   fast-xml-builder@1.3.1:
     resolution: {integrity: sha512-pIM/1n3ntFXKYrUZwW7QCK0gAW7XY+wzj1YMIV3tLDvPj/V+zTGJK5e3/4WJfwj0qWw2ElNXiTixda/R+3YSug==}
 
-  fast-xml-parser@5.11.0:
-    resolution: {integrity: sha512-9IGxMqvqLOnqP+Egi1nqDHKv5k8aZ7r9n558enxcucmyVGEBNPAU+MOg/8jPIS7rO7sSq4gFm1/nHtiaubMruw==}
+  fast-xml-parser@5.11.1:
+    resolution: {integrity: sha512-TBw6K/fxoQGGjCmZDw9w/ZwP3uDcnTM4YH/g+PFRWr8sbe5idXtxNN6vITh4+1ruCZaho6uBFurElsA7F0zzgw==}
     hasBin: true
 
   fd-slicer@1.1.0:
@@ -1886,8 +1886,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.1:
-    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   json-parse-even-better-errors@3.0.2:
@@ -3458,13 +3458,13 @@ snapshots:
       safe-regex2: 5.1.1
       strip-ansi: 7.2.0
 
-  '@wdio/mocha-framework@9.30.1':
+  '@wdio/mocha-framework@9.31.2':
     dependencies:
       '@types/mocha': 10.0.10
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
-      '@wdio/types': 9.30.1
-      '@wdio/utils': 9.30.1
+      '@wdio/types': 9.31.2
+      '@wdio/utils': 9.31.2
       mocha: 10.8.2
     transitivePeerDependencies:
       - bare-abort-controller
@@ -3951,7 +3951,7 @@ snapshots:
       '@zip.js/zip.js': 2.8.60
       decamelize: 6.0.1
       edge-paths: 3.0.5
-      fast-xml-parser: 5.11.0
+      fast-xml-parser: 5.11.1
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       which: 6.0.1
@@ -4134,7 +4134,7 @@ snapshots:
       path-expression-matcher: 1.6.2
       xml-naming: 0.3.0
 
-  fast-xml-parser@5.11.0:
+  fast-xml-parser@5.11.1:
     dependencies:
       '@nodable/entities': 3.0.0
       fast-xml-builder: 1.3.1
@@ -4414,7 +4414,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
@@ -4511,7 +4511,7 @@ snapshots:
       find-up: 5.0.0
       glob: 8.1.0
       he: 1.2.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       log-symbols: 4.1.0
       minimatch: 5.1.9
       ms: 2.1.3
