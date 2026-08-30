@@ -37,8 +37,8 @@ importers:
         specifier: ^9.31.2
         version: 9.31.2
       '@wdio/spec-reporter':
-        specifier: ^9.5.1
-        version: 9.24.0
+        specifier: ^9.31.2
+        version: 9.31.2
       svelte:
         specifier: ^5.56.10
         version: 5.56.10
@@ -1035,10 +1035,6 @@ packages:
     resolution: {integrity: sha512-nYacWDfVHolKQIZggbj4pB0Ndtr9YwRnVqdvw7bxT1YdUbGwLdJHJVL3Y/e5S+Cu57ntWI/MdhS0JXFgfBjzhA==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/logger@9.18.0':
-    resolution: {integrity: sha512-HdzDrRs+ywAqbXGKqe1i/bLtCv47plz4TvsHFH3j729OooT5VH38ctFn5aLXgECmiAKDkmH/A6kOq2Zh5DIxww==}
-    engines: {node: '>=18.20.0'}
-
   '@wdio/logger@9.29.1':
     resolution: {integrity: sha512-0ZAEIo6PNyMIJPlOGkIgyOJUjcd0pC8/QHlVAAe1c91/IcjZ1X+k0yidXHaboJdN7dq1XPUacmhRdtua0U5EZg==}
     engines: {node: '>=18.20.0'}
@@ -1057,12 +1053,12 @@ packages:
     resolution: {integrity: sha512-FLTF0VL6+o5BSTCO7yLSXocm3kUnu31zYwzdsz4n9s5YWt83sCtzGZlZpt7TaTzb3jVUfxuHNQDTb8UMkCu0lQ==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/reporter@9.24.0':
-    resolution: {integrity: sha512-0VrEX2uzjrFCHb6fNQDrQe6X7xuQbXUJhy5CGhMZghnPegW0OnKguwUy/vVKJE0HEDMOrR8djteefxJVfOOZpw==}
-    engines: {node: '>=18.20.0'}
-
   '@wdio/reporter@9.30.1':
     resolution: {integrity: sha512-0whWaLfJtOAy3PzbGUxGrCAGitgaUCMe8qUgAuP2l7ess70AXqvp1wJibw74a/Z2giegJlJiAc4PxS0abs9/tw==}
+    engines: {node: '>=18.20.0'}
+
+  '@wdio/reporter@9.31.2':
+    resolution: {integrity: sha512-3cKE6vCOsro/Ep9dGTIbo3FBn3WNvJ++BIn32lFd9m19pFdjuwlVgLtPXHb9jWNCJs740h5AIUcVkcscqUYhAA==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/runner@9.30.1':
@@ -1072,12 +1068,8 @@ packages:
       expect-webdriverio: ^5.6.5
       webdriverio: ^9.0.0
 
-  '@wdio/spec-reporter@9.24.0':
-    resolution: {integrity: sha512-I3HExQKvF5u+RUcwImk9JMiuBgo2MmuKDj3Y0oSRwSw0TxQX0nqVvt8udlVG6XJpOD+e4EqlCGWbFfMezi8iTA==}
-    engines: {node: '>=18.20.0'}
-
-  '@wdio/types@9.24.0':
-    resolution: {integrity: sha512-PYYunNl8Uq1r8YMJAK6ReRy/V/XIrCSyj5cpCtR5EqCL6heETOORFj7gt4uPnzidfgbtMBcCru0LgjjlMiH1UQ==}
+  '@wdio/spec-reporter@9.31.2':
+    resolution: {integrity: sha512-lNLLPUk4y1Yp5pWwBFF+tjZIy7bOv0TPTk4HDWV4LnnHnkc24abI0nN+kb2y5/JV8ZgwLCCVKUFRdRUxfKsAaQ==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/types@9.30.1':
@@ -1447,10 +1439,6 @@ packages:
 
   diff@5.2.2:
     resolution: {integrity: sha512-vtcDfH3TOjP8UekytvnHH1o1P4FcUdt4eQ1Y+Abap1tk/OB2MWQvcwS2ClCd1zuIhc3JKOx6p3kod8Vfys3E+A==}
-    engines: {node: '>=0.3.1'}
-
-  diff@8.0.3:
-    resolution: {integrity: sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ==}
     engines: {node: '>=0.3.1'}
 
   diff@8.0.4:
@@ -3442,14 +3430,6 @@ snapshots:
       - utf-8-validate
       - webdriverio
 
-  '@wdio/logger@9.18.0':
-    dependencies:
-      chalk: 5.6.2
-      loglevel: 1.9.2
-      loglevel-plugin-prefix: 0.8.4
-      safe-regex2: 5.1.1
-      strip-ansi: 7.2.0
-
   '@wdio/logger@9.29.1':
     dependencies:
       chalk: 5.6.2
@@ -3480,19 +3460,19 @@ snapshots:
     dependencies:
       '@types/node': 20.19.43
 
-  '@wdio/reporter@9.24.0':
-    dependencies:
-      '@types/node': 20.19.43
-      '@wdio/logger': 9.18.0
-      '@wdio/types': 9.24.0
-      diff: 8.0.3
-      object-inspect: 1.13.4
-
   '@wdio/reporter@9.30.1':
     dependencies:
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.30.1
+      diff: 8.0.4
+      object-inspect: 1.13.4
+
+  '@wdio/reporter@9.31.2':
+    dependencies:
+      '@types/node': 20.19.43
+      '@wdio/logger': 9.29.1
+      '@wdio/types': 9.31.2
       diff: 8.0.4
       object-inspect: 1.13.4
 
@@ -3517,17 +3497,13 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@wdio/spec-reporter@9.24.0':
+  '@wdio/spec-reporter@9.31.2':
     dependencies:
-      '@wdio/reporter': 9.24.0
-      '@wdio/types': 9.24.0
+      '@wdio/reporter': 9.31.2
+      '@wdio/types': 9.31.2
       chalk: 5.6.2
       easy-table: 1.2.0
       pretty-ms: 9.3.0
-
-  '@wdio/types@9.24.0':
-    dependencies:
-      '@types/node': 20.19.43
 
   '@wdio/types@9.30.1':
     dependencies:
@@ -3907,8 +3883,6 @@ snapshots:
   diff@4.0.4: {}
 
   diff@5.2.2: {}
-
-  diff@8.0.3: {}
 
   diff@8.0.4: {}
 
