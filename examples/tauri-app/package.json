@@ -12,7 +12,7 @@
     "test:e2e:watch": "wdio run e2e/wdio.conf.ts --watch"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.11.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.0.0",
