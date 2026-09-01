@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-webdriver"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["You"]
 description = "W3C WebDriver implementation for Tauri applications"
 license = "MIT"
