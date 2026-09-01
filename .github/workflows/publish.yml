@@ -25,11 +25,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache and install APT packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: Choochmeque/reusable-actions/actions/setup-linux-deps@v1
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: "1.0"
+          packages: libglib2.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       # Toolchain
       - uses: dtolnay/rust-toolchain@stable
