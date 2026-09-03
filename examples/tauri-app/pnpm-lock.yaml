@@ -34,8 +34,8 @@ importers:
         specifier: ^9.30.1
         version: 9.30.1(@wdio/globals@9.29.1)(webdriverio@9.31.5)
       '@wdio/mocha-framework':
-        specifier: ^9.31.2
-        version: 9.31.2
+        specifier: ^9.31.5
+        version: 9.31.5
       '@wdio/spec-reporter':
         specifier: ^9.31.2
         version: 9.31.2
@@ -883,8 +883,8 @@ packages:
     resolution: {integrity: sha512-0ZAEIo6PNyMIJPlOGkIgyOJUjcd0pC8/QHlVAAe1c91/IcjZ1X+k0yidXHaboJdN7dq1XPUacmhRdtua0U5EZg==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/mocha-framework@9.31.2':
-    resolution: {integrity: sha512-avNsAZdmV7NGGd/6T55FK+ZasV9XRchI7AOR4iRULdI+T5vdoqdreydEhjcofwbZZTbAwSyVqzdLaz0iO6zysw==}
+  '@wdio/mocha-framework@9.31.5':
+    resolution: {integrity: sha512-UYGNF8M77T7PKvRGidN+Iu++LSPLKbKpQ+K3eJEaDnP7hWcHk+x7VYKrXWPWorPuJfS2ocT+QWAgZlkEhTo6fQ==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/protocols@9.30.1':
@@ -926,10 +926,6 @@ packages:
 
   '@wdio/utils@9.30.1':
     resolution: {integrity: sha512-V+JE4G6ZO9ubdjDfHDHgp/2EWs5WCXk4IT2c2ZMoWy2qALqq4wqaeZ0ce05c3z0+N+8+xMS/Q9donDiIY1yk5A==}
-    engines: {node: '>=18.20.0'}
-
-  '@wdio/utils@9.31.2':
-    resolution: {integrity: sha512-3JqQfr6yEphrlxkQO9eWvURaL2LGdoMxTChvayGOIDhF1H3d+7E7QOc2i3rnhJIHolFisGsgMuP2uefa/UZKYQ==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/utils@9.31.5':
@@ -3198,13 +3194,13 @@ snapshots:
       safe-regex2: 5.1.1
       strip-ansi: 7.2.0
 
-  '@wdio/mocha-framework@9.31.2':
+  '@wdio/mocha-framework@9.31.5':
     dependencies:
       '@types/mocha': 10.0.10
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.31.2
-      '@wdio/utils': 9.31.2
+      '@wdio/utils': 9.31.5
       mocha: 10.8.2
     transitivePeerDependencies:
       - bare-abort-controller
@@ -3278,28 +3274,6 @@ snapshots:
       '@puppeteer/browsers': 2.13.2
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.30.1
-      decamelize: 6.0.1
-      deepmerge-ts: 7.1.6
-      edgedriver: 6.3.0
-      geckodriver: 6.1.1
-      get-port: 7.2.0
-      import-meta-resolve: 4.2.0
-      locate-app: 2.5.0
-      mitt: 3.0.1
-      safaridriver: 1.0.1
-      split2: 4.2.0
-      wait-port: 1.1.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-      - supports-color
-
-  '@wdio/utils@9.31.2':
-    dependencies:
-      '@puppeteer/browsers': 2.13.2
-      '@wdio/logger': 9.29.1
-      '@wdio/types': 9.31.2
       decamelize: 6.0.1
       deepmerge-ts: 7.1.6
       edgedriver: 6.3.0
