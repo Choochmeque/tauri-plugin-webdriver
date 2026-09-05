@@ -30,5 +30,10 @@
     "vite": "^7.3.6",
     "webdriverio": "^9.31.5"
   },
+  "pnpm": {
+    "overrides": {
+      "serialize-javascript": ">=7.0.5"
+    }
+  },
   "packageManager": "pnpm@10.16.0+sha512.8066e7b034217b700a9a4dbb3a005061d641ba130a89915213a10b3ca4919c19c037bec8066afdc559b89635fdb806b16ea673f2468fbb28aabfa13c53e3f769"
 }
