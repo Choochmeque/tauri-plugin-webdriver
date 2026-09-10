@@ -34,8 +34,8 @@ importers:
         specifier: ^9.29.1
         version: 9.29.1(expect-webdriverio@6.0.10)(webdriverio@9.31.5)
       '@wdio/local-runner':
-        specifier: ^9.31.5
-        version: 9.31.5(@wdio/globals@9.29.1)(webdriverio@9.31.5)
+        specifier: ^9.31.6
+        version: 9.31.6(@wdio/globals@9.29.1)(webdriverio@9.31.5)
       '@wdio/mocha-framework':
         specifier: ^9.31.5
         version: 9.31.5
@@ -867,6 +867,10 @@ packages:
     resolution: {integrity: sha512-Xdjo6+Qxg31kMflG2uBp7oCOlr0/BGxjsNJXdz9gT6J3pkNwiQf2O5wSUuJYqOYnuYLAimAklC47/0L//+3H4w==}
     engines: {node: '>=18.20.0'}
 
+  '@wdio/config@9.31.6':
+    resolution: {integrity: sha512-+Dk/firI6xPUSsx66Po2nF3CFEjVBC07hHq7K3Vhni/9lxbEO/uAxjyJbYz2ghKhGVHThHtQyggIvZqiBxUUgg==}
+    engines: {node: '>=18.20.0'}
+
   '@wdio/dot-reporter@9.31.2':
     resolution: {integrity: sha512-SY7lYPJzCGdedPxHcGMEJlC2tjdxqqq+e8ROGaob3kmjbKH2Zn7bQIqgCk9fOsA814Zz+V628pEKJNKHL8xpyQ==}
     engines: {node: '>=18.20.0'}
@@ -885,8 +889,8 @@ packages:
       expect-webdriverio: ^6.0.9
       webdriverio: ^9.28.0
 
-  '@wdio/local-runner@9.31.5':
-    resolution: {integrity: sha512-5jZcUpZGxWXr4Mido8DgiCzZ+B7EMXtPo8wGe96KwTWkHnCjFj53ZIjpT9GVYIxnJsX0zslqsuA28/2An0pq2g==}
+  '@wdio/local-runner@9.31.6':
+    resolution: {integrity: sha512-JHRQyMy6qEb/cmYcFrRsIzwOtn/Io3Vpb7o0Fjv+dLPB/7NgItJOEIg4t7k9prDUT2XQRHNdF9Ki+sGoty9iuw==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/logger@9.29.1':
@@ -911,8 +915,8 @@ packages:
     resolution: {integrity: sha512-3cKE6vCOsro/Ep9dGTIbo3FBn3WNvJ++BIn32lFd9m19pFdjuwlVgLtPXHb9jWNCJs740h5AIUcVkcscqUYhAA==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/runner@9.31.5':
-    resolution: {integrity: sha512-ffr8v2X104yrETxaVxq0oi0oFBfL3Q7xTrGLGneOsCSpwS+fuq6TkQr51zNZzB06ikjaFZnTmNMMh3GblC6jBQ==}
+  '@wdio/runner@9.31.6':
+    resolution: {integrity: sha512-AFeoDl+75VV6tEIzDUWJTEK+2cNgTYwksHgn1BNx5lsRfSC5AoAz1AoOtBkzevN4kaQpdZe2L8Bxz+hvJrO9VA==}
     engines: {node: '>=18.20.0'}
     peerDependencies:
       expect-webdriverio: ^6.0.9
@@ -936,6 +940,10 @@ packages:
 
   '@wdio/utils@9.31.5':
     resolution: {integrity: sha512-wufYrRdz0Dr8Oa9OiaFsitQJsD8HWG5J4FQi/r3nZv/W3S+1h1lpBCAmDisH1Q6wN7Ed9v20E56ZU0UOaP5v3g==}
+    engines: {node: '>=18.20.0'}
+
+  '@wdio/utils@9.31.6':
+    resolution: {integrity: sha512-yPEvnkCrxacYMP5x5EcscFgG5cjaedwJ4tg9aSgQFDWLR0zGUkuCHW95ufYlH1nMgiIhlxSqGvku5h6bjZvzAQ==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/xvfb@9.31.2':
@@ -1264,6 +1272,10 @@ packages:
   deepmerge-ts@7.1.6:
     resolution: {integrity: sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw==}
     engines: {node: '>=16.0.0'}
+
+  deepmerge-ts@8.0.2:
+    resolution: {integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==}
+    engines: {node: '>=16.9.0'}
 
   deepmerge@4.3.1:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
@@ -1995,8 +2007,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-is@19.2.8:
-    resolution: {integrity: sha512-s5un28nYxKJw5gvUHyW5PCC28CvBqLu9r3cWgzHT4Vo/5fqqkFcdRYsGcKf50WMPpjjFZS5d76fn3YCo2njKwQ==}
+  react-is@19.3.0:
+    resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
 
   read-pkg-up@10.1.0:
     resolution: {integrity: sha512-aNtBq4jR8NawpKJQldrQcSW9y/d+KWH4v24HWkHljOZ7H0av+YTGANBzRh9A5pw7v/bLVsLVPpOhJ7gHNVy8lA==}
@@ -2275,6 +2287,10 @@ packages:
     resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
     engines: {node: '>=18.17'}
 
+  undici@6.28.1:
+    resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
+    engines: {node: '>=18.17'}
+
   undici@7.29.0:
     resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
@@ -2361,6 +2377,10 @@ packages:
 
   webdriver@9.31.5:
     resolution: {integrity: sha512-ppQ3sKydQ59CVDsODri/pIdVfVp5nSP78qfwbK9LrrICbLkXktCd0pK/Nbc3EclbJ2hOfhfHpU8vuodJ73e4uA==}
+    engines: {node: '>=18.20.0'}
+
+  webdriver@9.31.6:
+    resolution: {integrity: sha512-4l+G2vu7PqVFXlUbMPZ7ueX95o2TgivTjvyBUAUSbllb8qUHIchBC26dscC4LRU44mAfBk1+GmZ6YkG9c0vxCA==}
     engines: {node: '>=18.20.0'}
 
   webdriverio@9.30.1:
@@ -3148,6 +3168,21 @@ snapshots:
       - react-native-b4a
       - supports-color
 
+  '@wdio/config@9.31.6':
+    dependencies:
+      '@wdio/logger': 9.29.1
+      '@wdio/types': 9.31.2
+      '@wdio/utils': 9.31.6
+      deepmerge-ts: 8.0.2
+      glob: 10.5.0
+      import-meta-resolve: 4.2.0
+      jiti: 2.7.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
   '@wdio/dot-reporter@9.31.2':
     dependencies:
       '@wdio/reporter': 9.31.2
@@ -3169,12 +3204,12 @@ snapshots:
       expect-webdriverio: 6.0.10(@wdio/globals@9.29.1)(@wdio/logger@9.29.1)(webdriverio@9.31.5)
       webdriverio: 9.31.5
 
-  '@wdio/local-runner@9.31.5(@wdio/globals@9.29.1)(webdriverio@9.31.5)':
+  '@wdio/local-runner@9.31.6(@wdio/globals@9.29.1)(webdriverio@9.31.5)':
     dependencies:
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
       '@wdio/repl': 9.16.2
-      '@wdio/runner': 9.31.5(expect-webdriverio@6.0.10)(webdriverio@9.31.5)
+      '@wdio/runner': 9.31.6(expect-webdriverio@6.0.10)(webdriverio@9.31.5)
       '@wdio/types': 9.31.2
       '@wdio/xvfb': 9.31.2
       exit-hook: 4.0.0
@@ -3229,18 +3264,18 @@ snapshots:
       diff: 8.0.4
       object-inspect: 1.13.4
 
-  '@wdio/runner@9.31.5(expect-webdriverio@6.0.10)(webdriverio@9.31.5)':
+  '@wdio/runner@9.31.6(expect-webdriverio@6.0.10)(webdriverio@9.31.5)':
     dependencies:
       '@types/node': 20.19.43
-      '@wdio/config': 9.31.5
+      '@wdio/config': 9.31.6
       '@wdio/dot-reporter': 9.31.2
       '@wdio/globals': 9.31.3(expect-webdriverio@6.0.10)(webdriverio@9.31.5)
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.31.2
-      '@wdio/utils': 9.31.5
-      deepmerge-ts: 7.1.6
+      '@wdio/utils': 9.31.6
+      deepmerge-ts: 8.0.2
       expect-webdriverio: 6.0.10(@wdio/globals@9.29.1)(@wdio/logger@9.29.1)(webdriverio@9.31.5)
-      webdriver: 9.31.5
+      webdriver: 9.31.6
       webdriverio: 9.31.5
     transitivePeerDependencies:
       - bare-abort-controller
@@ -3295,6 +3330,28 @@ snapshots:
       '@wdio/types': 9.31.2
       decamelize: 6.0.1
       deepmerge-ts: 7.1.6
+      edgedriver: 6.3.0
+      geckodriver: 6.1.1
+      get-port: 7.2.0
+      import-meta-resolve: 4.2.0
+      locate-app: 2.5.0
+      mitt: 3.0.1
+      safaridriver: 1.0.1
+      split2: 4.2.0
+      wait-port: 1.1.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
+  '@wdio/utils@9.31.6':
+    dependencies:
+      '@puppeteer/browsers': 2.13.2
+      '@wdio/logger': 9.29.1
+      '@wdio/types': 9.31.2
+      decamelize: 6.0.1
+      deepmerge-ts: 8.0.2
       edgedriver: 6.3.0
       geckodriver: 6.1.1
       get-port: 7.2.0
@@ -3615,6 +3672,8 @@ snapshots:
   deep-eql@5.0.2: {}
 
   deepmerge-ts@7.1.6: {}
+
+  deepmerge-ts@8.0.2: {}
 
   deepmerge@4.3.1: {}
 
@@ -4358,7 +4417,7 @@ snapshots:
   pretty-format@30.5.1:
     dependencies:
       '@jest/react-is-18': react-is@18.3.1
-      '@jest/react-is-19': react-is@19.2.8
+      '@jest/react-is-19': react-is@19.3.0
       '@jest/schemas': 30.5.0
       ansi-styles: 5.2.0
 
@@ -4396,7 +4455,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-is@19.2.8: {}
+  react-is@19.3.0: {}
 
   read-pkg-up@10.1.0:
     dependencies:
@@ -4750,6 +4809,8 @@ snapshots:
 
   undici@6.28.0: {}
 
+  undici@6.28.1: {}
+
   undici@7.29.0: {}
 
   unicorn-magic@0.3.0: {}
@@ -4831,6 +4892,27 @@ snapshots:
       deepmerge-ts: 7.1.6
       https-proxy-agent: 7.0.6
       undici: 6.28.0
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bufferutil
+      - react-native-b4a
+      - supports-color
+      - utf-8-validate
+
+  webdriver@9.31.6:
+    dependencies:
+      '@types/node': 20.19.43
+      '@types/ws': 8.18.1
+      '@wdio/config': 9.31.6
+      '@wdio/logger': 9.29.1
+      '@wdio/protocols': 9.31.5
+      '@wdio/types': 9.31.2
+      '@wdio/utils': 9.31.6
+      deepmerge-ts: 8.0.2
+      https-proxy-agent: 7.0.6
+      undici: 6.28.1
       ws: 8.21.3
     transitivePeerDependencies:
       - bare-abort-controller
