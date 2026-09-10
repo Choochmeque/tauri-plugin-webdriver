@@ -37,8 +37,8 @@ importers:
         specifier: ^9.31.6
         version: 9.31.6(@wdio/globals@9.31.3)(webdriverio@9.31.6)
       '@wdio/mocha-framework':
-        specifier: ^9.31.5
-        version: 9.31.5
+        specifier: ^9.31.6
+        version: 9.31.6
       '@wdio/spec-reporter':
         specifier: ^9.31.2
         version: 9.31.2
@@ -882,8 +882,8 @@ packages:
     resolution: {integrity: sha512-0ZAEIo6PNyMIJPlOGkIgyOJUjcd0pC8/QHlVAAe1c91/IcjZ1X+k0yidXHaboJdN7dq1XPUacmhRdtua0U5EZg==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/mocha-framework@9.31.5':
-    resolution: {integrity: sha512-UYGNF8M77T7PKvRGidN+Iu++LSPLKbKpQ+K3eJEaDnP7hWcHk+x7VYKrXWPWorPuJfS2ocT+QWAgZlkEhTo6fQ==}
+  '@wdio/mocha-framework@9.31.6':
+    resolution: {integrity: sha512-huGMzC912yUIPKPuJht/GMtrpBZLC68L9vGoPSaPwAohkB3UZZxq6QNg0c+VV1iTPE0LcU7iptYk/Lf/hwC/7w==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/protocols@9.31.5':
@@ -910,10 +910,6 @@ packages:
 
   '@wdio/types@9.31.2':
     resolution: {integrity: sha512-lQKaiQDCJJ6VC1K/cKzaAxCpwB9pL1U0VbmX2uGksMxO4EDbNuLvIxWryuUDJ7OaSYTjxILTKYFErdbT/xEikg==}
-    engines: {node: '>=18.20.0'}
-
-  '@wdio/utils@9.31.5':
-    resolution: {integrity: sha512-wufYrRdz0Dr8Oa9OiaFsitQJsD8HWG5J4FQi/r3nZv/W3S+1h1lpBCAmDisH1Q6wN7Ed9v20E56ZU0UOaP5v3g==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/utils@9.31.6':
@@ -1242,10 +1238,6 @@ packages:
   deep-eql@5.0.2:
     resolution: {integrity: sha512-h5k/5U50IJJFpzfL6nO9jaaumfjO/f2NjK/oYB2Djzm4p9L+3T9qWpZqZ2hAbLPuuYq9wrU08WQyBTL5GbPk5Q==}
     engines: {node: '>=6'}
-
-  deepmerge-ts@7.1.6:
-    resolution: {integrity: sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw==}
-    engines: {node: '>=16.0.0'}
 
   deepmerge-ts@8.0.2:
     resolution: {integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==}
@@ -3151,13 +3143,13 @@ snapshots:
       safe-regex2: 5.1.1
       strip-ansi: 7.2.0
 
-  '@wdio/mocha-framework@9.31.5':
+  '@wdio/mocha-framework@9.31.6':
     dependencies:
       '@types/mocha': 10.0.10
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.31.2
-      '@wdio/utils': 9.31.5
+      '@wdio/utils': 9.31.6
       mocha: 10.8.2
     transitivePeerDependencies:
       - bare-abort-controller
@@ -3211,28 +3203,6 @@ snapshots:
   '@wdio/types@9.31.2':
     dependencies:
       '@types/node': 20.19.43
-
-  '@wdio/utils@9.31.5':
-    dependencies:
-      '@puppeteer/browsers': 2.13.2
-      '@wdio/logger': 9.29.1
-      '@wdio/types': 9.31.2
-      decamelize: 6.0.1
-      deepmerge-ts: 7.1.6
-      edgedriver: 6.3.0
-      geckodriver: 6.1.1
-      get-port: 7.2.0
-      import-meta-resolve: 4.2.0
-      locate-app: 2.5.0
-      mitt: 3.0.1
-      safaridriver: 1.0.1
-      split2: 4.2.0
-      wait-port: 1.1.0
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-      - supports-color
 
   '@wdio/utils@9.31.6':
     dependencies:
@@ -3559,8 +3529,6 @@ snapshots:
   decamelize@6.0.1: {}
 
   deep-eql@5.0.2: {}
-
-  deepmerge-ts@7.1.6: {}
 
   deepmerge-ts@8.0.2: {}
 
