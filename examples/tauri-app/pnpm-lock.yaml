@@ -37,8 +37,8 @@ importers:
         specifier: ^9.31.6
         version: 9.31.6(@wdio/globals@9.31.3)(webdriverio@9.31.6)
       '@wdio/mocha-framework':
-        specifier: ^9.31.6
-        version: 9.31.6
+        specifier: ^9.31.9
+        version: 9.31.9
       '@wdio/spec-reporter':
         specifier: ^9.31.2
         version: 9.31.2
@@ -882,8 +882,8 @@ packages:
     resolution: {integrity: sha512-0ZAEIo6PNyMIJPlOGkIgyOJUjcd0pC8/QHlVAAe1c91/IcjZ1X+k0yidXHaboJdN7dq1XPUacmhRdtua0U5EZg==}
     engines: {node: '>=18.20.0'}
 
-  '@wdio/mocha-framework@9.31.6':
-    resolution: {integrity: sha512-huGMzC912yUIPKPuJht/GMtrpBZLC68L9vGoPSaPwAohkB3UZZxq6QNg0c+VV1iTPE0LcU7iptYk/Lf/hwC/7w==}
+  '@wdio/mocha-framework@9.31.9':
+    resolution: {integrity: sha512-1kFnNNafUgNz8yg+C6EK3Ykt3K5X9+L52o3XTdYJCs2mGI/n0nCdzHr/Yh7AMGcAAvLtPtCgEnIT0nM7dmPbzg==}
     engines: {node: '>=18.20.0'}
 
   '@wdio/protocols@9.31.5':
@@ -916,12 +916,20 @@ packages:
     resolution: {integrity: sha512-yPEvnkCrxacYMP5x5EcscFgG5cjaedwJ4tg9aSgQFDWLR0zGUkuCHW95ufYlH1nMgiIhlxSqGvku5h6bjZvzAQ==}
     engines: {node: '>=18.20.0'}
 
+  '@wdio/utils@9.31.9':
+    resolution: {integrity: sha512-k0Py9L7PxRq8d8/6+B5l4078c12/7lbDzqUVrrhH7VJDV0/EM0qVTtP1LVttLYZEPazdAn0kLSFBCLiiJmfM7Q==}
+    engines: {node: '>=18.20.0'}
+
   '@wdio/xvfb@9.31.2':
     resolution: {integrity: sha512-48MqdcrvdC/Jn2YPhW6hjGLzcQqOEt1Q6KELR/TWz3vIJoZwzTngGAdT06voUnZS+PUEcd/vKSo4a6zxQ/mm7g==}
     engines: {node: '>=18.20.0'}
 
   '@zip.js/zip.js@2.14.0':
     resolution: {integrity: sha512-7HIW+xGAl6LeTlgfLEKeRBPBskNtLSXRNXqb0QuUv6kYO7hhJvSda1UfYvyfyKJxod3q5GRvYZjjdtkxO1FMiQ==}
+    engines: {bun: '>=0.7.0', deno: '>=1.0.0', node: '>=18.0.0'}
+
+  '@zip.js/zip.js@2.15.0':
+    resolution: {integrity: sha512-hYAuHAaWjt0axbofaDL5XUlmrQPsBDcK3f45ApZuh6N+8UGVk26GoGdtGDvcvzahsHytTQ6DtBVXwG9IcCMjjQ==}
     engines: {bun: '>=0.7.0', deno: '>=1.0.0', node: '>=18.0.0'}
 
   abort-controller@3.0.0:
@@ -1081,6 +1089,9 @@ packages:
 
   brace-expansion@2.1.4:
     resolution: {integrity: sha512-hGfVzPxthbf3+2yjg/RBs60cB0FhqBS/zvdV/4wn4/BmN0bNMMHPc4V/BbFieqf1TKAGGAHnY4eSjajCl0f2Xg==}
+
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
@@ -1298,6 +1309,11 @@ packages:
 
   edgedriver@6.3.0:
     resolution: {integrity: sha512-ggEQL+oEyIcM4nP2QC3AtCQ04o4kDNefRM3hja0odvlPSnsaxiruMxEZ93v3gDCKWYW6BXUr51PPradb+3nffw==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+
+  edgedriver@6.3.1:
+    resolution: {integrity: sha512-wCL/Ydgt0DPkWecjhhPj2/lnDxsGeHLPKeJYKKMTNol+ULFVg4WaTvxoB19GU4tieM6LSA3vZEdZxmDC0DwIpQ==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -3143,13 +3159,13 @@ snapshots:
       safe-regex2: 5.1.1
       strip-ansi: 7.2.0
 
-  '@wdio/mocha-framework@9.31.6':
+  '@wdio/mocha-framework@9.31.9':
     dependencies:
       '@types/mocha': 10.0.10
       '@types/node': 20.19.43
       '@wdio/logger': 9.29.1
       '@wdio/types': 9.31.2
-      '@wdio/utils': 9.31.6
+      '@wdio/utils': 9.31.9
       mocha: 10.8.2
     transitivePeerDependencies:
       - bare-abort-controller
@@ -3226,11 +3242,35 @@ snapshots:
       - react-native-b4a
       - supports-color
 
+  '@wdio/utils@9.31.9':
+    dependencies:
+      '@puppeteer/browsers': 2.13.2
+      '@wdio/logger': 9.29.1
+      '@wdio/types': 9.31.2
+      decamelize: 6.0.1
+      deepmerge-ts: 8.0.2
+      edgedriver: 6.3.1
+      geckodriver: 6.1.1
+      get-port: 7.2.0
+      import-meta-resolve: 4.2.0
+      locate-app: 2.5.0
+      mitt: 3.0.1
+      safaridriver: 1.0.1
+      split2: 4.2.0
+      wait-port: 1.1.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
+
   '@wdio/xvfb@9.31.2':
     dependencies:
       '@wdio/logger': 9.29.1
 
   '@zip.js/zip.js@2.14.0': {}
+
+  '@zip.js/zip.js@2.15.0': {}
 
   abort-controller@3.0.0:
     dependencies:
@@ -3356,6 +3396,10 @@ snapshots:
       concat-map: 0.0.1
 
   brace-expansion@2.1.4:
+    dependencies:
+      balanced-match: 1.0.2
+
+  brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
 
@@ -3593,6 +3637,18 @@ snapshots:
       decamelize: 6.0.1
       edge-paths: 3.0.5
       fast-xml-parser: 5.11.1
+      http-proxy-agent: 7.0.2
+      https-proxy-agent: 7.0.6
+      which: 6.0.1
+    transitivePeerDependencies:
+      - supports-color
+
+  edgedriver@6.3.1:
+    dependencies:
+      '@wdio/logger': 9.29.1
+      '@zip.js/zip.js': 2.15.0
+      decamelize: 6.0.1
+      edge-paths: 3.0.5
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       which: 6.0.1
@@ -4103,7 +4159,7 @@ snapshots:
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 2.1.7
 
   minimatch@9.0.9:
     dependencies:
