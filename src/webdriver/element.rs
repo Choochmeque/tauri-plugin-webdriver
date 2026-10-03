@@ -55,7 +55,7 @@ mod tests {
         let mut store = ElementStore::new();
         let elem = store.store();
 
-        assert!(!elem.id.is_empty());
+        assert_ne!(elem.id, "");
         assert!(elem.js_ref.starts_with("__wd_el_"));
         // js_ref uses ID without hyphens
         assert!(elem.js_ref.contains(&elem.id.replace('-', "")));
