@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -14,7 +15,7 @@ val tauriProperties = Properties().apply {
 }
 
 android {
-    compileSdk = 36
+    compileSdk = 37
     namespace = "test.tauri.webdriver"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
@@ -45,11 +46,18 @@ android {
             )
         }
     }
-    kotlinOptions {
-        jvmTarget = "1.8"
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_1_8
     }
 }
 
