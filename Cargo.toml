@@ -39,7 +39,7 @@ windows-core = "0.62"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"
-javascriptcore-rs = "1.1"
+javascriptcore-rs = "2.0"
 glib = "0.22"
 gtk = "0.18"
 cairo-rs = { version = "0.18", features = ["png"] }
